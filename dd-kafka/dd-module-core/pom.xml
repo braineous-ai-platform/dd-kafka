@@ -12,8 +12,12 @@
     <artifactId>dd-module-core</artifactId>
     <packaging>jar</packaging>
     <name>dd-module-core</name>
-
     <dependencies>
+        <dependency>
+            <groupId>com.google.code.gson</groupId>
+            <artifactId>gson</artifactId>
+            <version>2.11.0</version>
+        </dependency>
         <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter</artifactId>
