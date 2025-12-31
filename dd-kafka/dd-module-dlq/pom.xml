@@ -9,9 +9,9 @@
         <version>1.0.0</version>
     </parent>
 
-    <artifactId>dd-module-ordering</artifactId>
+    <artifactId>dd-module-dlq</artifactId>
     <packaging>jar</packaging>
-    <name>dd-module-ordering</name>
+    <name>dd-module-dlq</name>
 
     <dependencies>
         <dependency>

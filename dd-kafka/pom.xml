@@ -3,17 +3,21 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
   <modelVersion>4.0.0</modelVersion>
 
-  <groupId>io.ddkafka</groupId>
+  <groupId>io.braineous</groupId>
   <artifactId>dd-kafka</artifactId>
-  <version>0.0.1-SNAPSHOT</version>
+  <version>1.0.0</version>
   <packaging>pom</packaging>
 
   <name>dd-kafka</name>
   <description>Java library providing deterministic Kafka-based data delivery with ordering, idempotency, replay, and durability guarantees.</description>
 
   <modules>
-    <module>dd-pack-fact</module>
+    <module>dd-pack</module>
     <module>dd-module-ordering</module>
+    <module>dd-module-dlq</module>
+    <module>dd-module-processor</module>
+    <module>dd-module-core</module>
+    <module>dd-test-suite</module>
   </modules>
 
   <properties>

@@ -9,9 +9,9 @@
         <version>1.0.0</version>
     </parent>
 
-    <artifactId>dd-module-ordering</artifactId>
+    <artifactId>dd-module-core</artifactId>
     <packaging>jar</packaging>
-    <name>dd-module-ordering</name>
+    <name>dd-module-core</name>
 
     <dependencies>
         <dependency>

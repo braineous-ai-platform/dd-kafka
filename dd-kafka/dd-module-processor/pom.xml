@@ -4,14 +4,14 @@
     <modelVersion>4.0.0</modelVersion>
 
     <parent>
-        <groupId>io.ddkafka</groupId>
+        <groupId>io.braineous</groupId>
         <artifactId>dd-kafka</artifactId>
-        <version>0.0.1-SNAPSHOT</version>
+        <version>1.0.0</version>
     </parent>
 
-    <artifactId>dd-pack-fact</artifactId>
+    <artifactId>dd-module-processor</artifactId>
     <packaging>jar</packaging>
-    <name>dd-pack-fact</name>
+    <name>dd-module-processor</name>
 
     <dependencies>
         <dependency>
