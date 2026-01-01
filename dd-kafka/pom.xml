@@ -13,7 +13,6 @@
 
   <modules>
     <module>dd-pack</module>
-    <module>dd-module-ordering</module>
     <module>dd-module-dlq</module>
     <module>dd-module-processor</module>
     <module>dd-module-kafka-producer</module>

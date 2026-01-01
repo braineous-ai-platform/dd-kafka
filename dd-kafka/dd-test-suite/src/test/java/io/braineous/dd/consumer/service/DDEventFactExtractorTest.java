@@ -1,20 +1,19 @@
-package io.braineous.dd.ordering;
+package io.braineous.dd.consumer.service;
 
 import ai.braineous.rag.prompt.cgo.api.Fact;
 import ai.braineous.rag.prompt.observe.Console;
+import com.google.gson.JsonObject;
+import org.junit.jupiter.api.Test;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import java.util.List;
 import java.util.Set;
 
-import com.google.gson.JsonObject;
-import org.junit.jupiter.api.Test;
-
 import static org.junit.jupiter.api.Assertions.*;
 
 
-public class EventFactExtractorTest {
+public class DDEventFactExtractorTest {
 
     @Test
     void extract_should_create_single_fact_for_base64_binary_payload() {
@@ -39,7 +38,7 @@ public class EventFactExtractorTest {
     }
     """;
 
-        EventFactExtractor extractor = new EventFactExtractor();
+        DDEventFactExtractor extractor = new DDEventFactExtractor();
 
         // when
         List<Fact> facts = extractor.extract(json);
@@ -102,7 +101,7 @@ public class EventFactExtractorTest {
     }
     """.formatted(base64);
 
-        EventFactExtractor extractor = new EventFactExtractor();
+        DDEventFactExtractor extractor = new DDEventFactExtractor();
 
         // when
         List<Fact> facts = extractor.extract(envelope);
@@ -172,7 +171,7 @@ public class EventFactExtractorTest {
     }
     """.formatted(base64);
 
-        EventFactExtractor extractor = new EventFactExtractor();
+        DDEventFactExtractor extractor = new DDEventFactExtractor();
 
         // when
         List<Fact> facts = extractor.extract(envelope);
@@ -223,7 +222,7 @@ public class EventFactExtractorTest {
     }
     """.formatted(base64);
 
-        EventFactExtractor extractor = new EventFactExtractor();
+        DDEventFactExtractor extractor = new DDEventFactExtractor();
 
         // when
         List<Fact> facts = extractor.extract(envelope);
@@ -278,7 +277,7 @@ public class EventFactExtractorTest {
     }
     """.formatted(base64);
 
-        EventFactExtractor extractor = new EventFactExtractor();
+        DDEventFactExtractor extractor = new DDEventFactExtractor();
 
         // when
         List<Fact> facts = extractor.extract(envelope);
@@ -341,7 +340,7 @@ public class EventFactExtractorTest {
     }
     """.formatted(base64);
 
-        EventFactExtractor extractor = new EventFactExtractor();
+        DDEventFactExtractor extractor = new DDEventFactExtractor();
 
         // when
         List<Fact> facts = extractor.extract(envelope);
@@ -389,7 +388,7 @@ public class EventFactExtractorTest {
     }
     """.formatted(base64);
 
-        EventFactExtractor extractor = new EventFactExtractor();
+        DDEventFactExtractor extractor = new DDEventFactExtractor();
 
         // when
         List<Fact> facts = extractor.extract(envelope);
@@ -414,7 +413,7 @@ public class EventFactExtractorTest {
         // given
         String garbage = "}{ not-json :::";
 
-        EventFactExtractor extractor = new EventFactExtractor();
+        DDEventFactExtractor extractor = new DDEventFactExtractor();
 
         // when
         List<Fact> facts = extractor.extract(garbage);
@@ -444,7 +443,7 @@ public class EventFactExtractorTest {
     }
     """;
 
-        EventFactExtractor extractor = new EventFactExtractor();
+        DDEventFactExtractor extractor = new DDEventFactExtractor();
 
         // when
         List<Fact> facts = extractor.extract(envelope);
@@ -475,7 +474,7 @@ public class EventFactExtractorTest {
     }
     """;
 
-        EventFactExtractor extractor = new EventFactExtractor();
+        DDEventFactExtractor extractor = new DDEventFactExtractor();
 
         // when
         List<Fact> facts = extractor.extract(envelope);
@@ -517,7 +516,7 @@ public class EventFactExtractorTest {
     }
     """.formatted(base64);
 
-        EventFactExtractor extractor = new EventFactExtractor();
+        DDEventFactExtractor extractor = new DDEventFactExtractor();
 
         // when: replay same message twice
         List<Fact> run1 = extractor.extract(envelope);
@@ -575,7 +574,7 @@ public class EventFactExtractorTest {
     }
     """.formatted(base64);
 
-        EventFactExtractor extractor = new EventFactExtractor();
+        DDEventFactExtractor extractor = new DDEventFactExtractor();
 
         // when
         List<Fact> facts = extractor.extract(envelope);
@@ -626,7 +625,7 @@ public class EventFactExtractorTest {
     }
     """.formatted(base64);
 
-        EventFactExtractor extractor = new EventFactExtractor();
+        DDEventFactExtractor extractor = new DDEventFactExtractor();
 
         // when
         List<Fact> facts = extractor.extract(envelope);
@@ -652,7 +651,7 @@ public class EventFactExtractorTest {
 
     @Test
     void extract_should_return_empty_list_for_null_or_blank_input() {
-        EventFactExtractor extractor = new EventFactExtractor();
+        DDEventFactExtractor extractor = new DDEventFactExtractor();
 
         List<Fact> a = extractor.extract(null);
         Console.log("null", a);
@@ -693,7 +692,7 @@ public class EventFactExtractorTest {
 
         String envelope = root.toString();
 
-        EventFactExtractor extractor = new EventFactExtractor();
+        DDEventFactExtractor extractor = new DDEventFactExtractor();
         List<Fact> facts = extractor.extract(envelope);
 
         Console.log("facts.size", facts.size());

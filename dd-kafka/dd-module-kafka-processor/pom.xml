@@ -49,6 +49,13 @@
             <scope>test</scope>
         </dependency>
 
+        <!-- CGO (Causal Graph Orchestrator -->
+        <dependency>
+            <groupId>ai.braineous</groupId>
+            <artifactId>cgo-core</artifactId>
+            <version>1.0.0-SNAPSHOT</version>
+        </dependency>
+
         <!-- quarkus kafka -->
         <dependency>
             <groupId>io.quarkus</groupId>

@@ -1,4 +1,4 @@
-package io.braineous.dd.ordering;
+package io.braineous.dd.consumer.service;
 
 import ai.braineous.rag.prompt.cgo.api.Fact;
 import ai.braineous.rag.prompt.cgo.api.FactExtractor;
@@ -10,7 +10,7 @@ import com.google.gson.JsonParser;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
 
-public class EventFactExtractor implements FactExtractor {
+public class DDEventFactExtractor implements FactExtractor {
     @Override
     public List<Fact> extract(String json) {
         if (json == null || json.trim().isEmpty()) {
