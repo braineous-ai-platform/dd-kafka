@@ -23,7 +23,7 @@
 <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 <script>
     $("#request-quote").click((event) => {
-        fetch("/quotes/request", {method: "POST"})
+        fetch("/ingestion", {method: "POST"})
         .then(res => res.text())
         .then(qid => {
             var row = $(`<h4 class='col-md-12' id='${qid}'>Quote # <i>${qid}</i> | <strong>Pending</strong></h4>`);

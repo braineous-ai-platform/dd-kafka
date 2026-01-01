@@ -13,6 +13,26 @@
     <packaging>jar</packaging>
     <name>dd-test-suite</name>
 
+    <properties>
+        <quarkus.platform.group-id>io.quarkus.platform</quarkus.platform.group-id>
+        <quarkus.platform.artifact-id>quarkus-bom</quarkus.platform.artifact-id>
+        <quarkus.platform.version>3.30.5</quarkus.platform.version>
+        <smallrye.reactive.messaging.version>4.30.0</smallrye.reactive.messaging.version>
+    </properties>
+
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>${quarkus.platform.group-id}</groupId>
+                <artifactId>${quarkus.platform.artifact-id}</artifactId>
+                <version>${quarkus.platform.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
+
     <dependencies>
         <dependency>
             <groupId>io.braineous</groupId>
@@ -30,6 +50,12 @@
             <version>1.0.0</version>
         </dependency>
         <dependency>
+            <groupId>io.braineous</groupId>
+            <artifactId>dd-module-kafka-producer</artifactId>
+            <version>1.0.0</version>
+        </dependency>
+
+        <dependency>
             <groupId>ai.braineous</groupId>
             <artifactId>cgo-core</artifactId>
             <version>1.0.0-SNAPSHOT</version>
@@ -39,6 +65,46 @@
             <artifactId>junit-jupiter</artifactId>
             <scope>test</scope>
         </dependency>
+
+        <!-- REST endpoint -->
+        <dependency>
+            <groupId>io.quarkus</groupId>
+            <artifactId>quarkus-rest</artifactId>
+        </dependency>
+
+        <!-- In-memory reactive messaging for tests -->
+        <dependency>
+            <groupId>io.smallrye.reactive</groupId>
+            <artifactId>smallrye-reactive-messaging-in-memory</artifactId>
+            <version>${smallrye.reactive.messaging.version}</version>
+            <scope>test</scope>
+        </dependency>
+
+        <!-- Quarkus test runner -->
+        <dependency>
+            <groupId>io.quarkus</groupId>
+            <artifactId>quarkus-junit5</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <!-- REST testing -->
+        <dependency>
+            <groupId>io.rest-assured</groupId>
+            <artifactId>rest-assured</artifactId>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>io.quarkus</groupId>
+                <artifactId>quarkus-maven-plugin</artifactId>
+                <version>${quarkus.platform.version}</version>
+                <extensions>true</extensions>
+            </plugin>
+        </plugins>
+    </build>
+
 
 </project>
