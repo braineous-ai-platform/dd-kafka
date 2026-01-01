@@ -20,6 +20,7 @@
     <module>dd-module-kafka-processor</module>
     <module>dd-module-core</module>
     <module>dd-test-suite</module>
+    <module>dd-it-suite</module>
   </modules>
 
   <properties>
