@@ -5,7 +5,7 @@ import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-public class ProcessorOrchestratorTest {
+public class DDProducerClientTest {
 
     @Test
     void invoke_should_fail_when_httpPoster_is_null() {

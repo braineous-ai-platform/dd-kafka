@@ -16,7 +16,7 @@ import java.net.http.HttpResponse;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-public class ProcessorOrchestratorITTest {
+public class ProcessorOrchestratorIT {
 
     private static final String CONSUMER_BASE = System.getProperty("dd.consumer.baseUrl", "http://localhost:8081");
     private static final HttpClient http = HttpClient.newHttpClient();
