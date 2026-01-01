@@ -10,7 +10,7 @@ import org.eclipse.microprofile.reactive.messaging.Channel;
 import org.eclipse.microprofile.reactive.messaging.Emitter;
 
 
-@Path("/ingestion")
+@Path("/api")
 public class IngestionResource {
 
     @Inject
@@ -21,6 +21,7 @@ public class IngestionResource {
      * Endpoint to generate a new quote request id and send it to "dd_cgo_ingestion_out" Kafka topic using the emitter.
      */
     @POST
+    @Path("/ingestion")
     @Consumes(MediaType.APPLICATION_JSON)
     @Produces(MediaType.APPLICATION_JSON)
     public String createRequest(

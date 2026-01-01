@@ -30,7 +30,7 @@ public class ProcessorOrchestrator {
 
         // Direction: choose one transport later (Kafka emit OR REST call).
         // For now route through a client stub so wiring stays stable.
-        String ingestionEndpoint = "/ingestion";
+        String ingestionEndpoint = "/api/ingestion";
         return DDProducerClient.getInstance().invoke(httpPoster,
                 new GsonJsonSerializer(),
                 ingestionEndpoint,
