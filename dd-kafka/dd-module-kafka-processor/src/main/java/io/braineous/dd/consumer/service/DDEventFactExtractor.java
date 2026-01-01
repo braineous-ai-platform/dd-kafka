@@ -17,13 +17,28 @@ public class DDEventFactExtractor implements FactExtractor {
             return Collections.emptyList();
         }
 
-        JsonObject root;
+        JsonElement parsed;
         try {
-            root = JsonParser.parseString(json).getAsJsonObject();
+            parsed = JsonParser.parseString(json);
         } catch (Exception e) {
             return Collections.emptyList();
         }
 
+        if (parsed.isJsonArray()) {
+            Map<String, Fact> dedup = new LinkedHashMap<>();
+            for (JsonElement el : parsed.getAsJsonArray()) {
+                if (el == null || el.isJsonNull() || !el.isJsonObject()) continue;
+                List<Fact> fs = extract(el.toString()); // reuse existing single-envelope logic
+                for (Fact f : fs) {
+                    if (f == null || f.getId() == null || f.getId().isBlank()) continue;
+                    dedup.put(f.getId(), f);
+                }
+            }
+            return new ArrayList<>(dedup.values());
+        }
+
+        // existing path: single object envelope
+        JsonObject root = parsed.getAsJsonObject();
         JsonObject kafka = obj(root, "kafka");
         JsonObject payload = obj(root, "payload");
 
