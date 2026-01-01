@@ -12,12 +12,12 @@ public class Ingestion {
 
     static CaptureStore store = new CaptureStore();
 
-    static CaptureStore getStore(){
+    public static CaptureStore getStore(){
         return store;
     }
 
 
-    @Incoming("ingestion")
+    @Incoming("ingestion_in")
     public void process(String ingestionJson) {
         Ingestion.getStore().add(ingestionJson);
         System.out.println("INGESTION: " + ingestionJson);

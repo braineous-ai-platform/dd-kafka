@@ -49,11 +49,6 @@
             <artifactId>dd-module-processor</artifactId>
             <version>1.0.0</version>
         </dependency>
-        <dependency>
-            <groupId>io.braineous</groupId>
-            <artifactId>dd-module-kafka-producer</artifactId>
-            <version>1.0.0</version>
-        </dependency>
 
         <dependency>
             <groupId>ai.braineous</groupId>
@@ -78,6 +73,10 @@
             <artifactId>smallrye-reactive-messaging-in-memory</artifactId>
             <version>${smallrye.reactive.messaging.version}</version>
             <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.quarkus</groupId>
+            <artifactId>quarkus-messaging-kafka</artifactId>
         </dependency>
 
         <!-- Quarkus test runner -->
