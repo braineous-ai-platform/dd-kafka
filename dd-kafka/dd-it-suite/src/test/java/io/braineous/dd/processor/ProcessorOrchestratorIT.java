@@ -563,6 +563,63 @@ public class ProcessorOrchestratorIT {
         assertEquals(1, size, "Expected replay to be consumed after consumer store reset");
     }
 
+    //end-to-end processorOrch -> producer ->consumer -> cgo
+
+    @Test
+    void idempotency_sameEventTwice_shouldNotChangeGraphSnapshot(TestInfo ti) throws Exception {
+
+        // clear consumer capture store (ok even if graph not cleared; we compare after first vs after dup)
+        postNoBody(CONSUMER_BASE + "/debug/captures/clear");
+
+        DDEvent event = DDEvent.of(
+                        "requests",
+                        3,
+                        48192L,
+                        1767114000123L,
+                        "fact-001",
+                        "base64",
+                        "AAECAwQFBgcICQ=="
+                ).header("traceId", "8f3a9c12")
+                .header("itTest", ti.getDisplayName())
+                .header("correlationId", "corr-9911");
+
+        GsonJsonSerializer serializer = new GsonJsonSerializer();
+        JsonObject ddEventJson = JsonParser.parseString(serializer.toJson(event)).getAsJsonObject();
+
+        // real poster
+        HttpPoster httpPoster = new DDIngestionHttpPoster();
+
+        // orchestrate twice
+        ProcessorOrchestrator orch = ProcessorOrchestrator.getInstance();
+        orch.setHttpPoster(httpPoster);
+
+        ProcessorResult r1 = orch.orchestrate(ddEventJson);
+        Console.log("IDEMPOTENCY_SEND_1", r1);
+        assertNotNull(r1);
+        assertTrue(r1.isOk(), "First send failed: " + (r1.getWhy() != null ? r1.getWhy() : "null"));
+
+        // wait for graph to appear and capture hash1
+        awaitGraphNonEmpty();
+        String hash1 = fetchGraphCanonicalSha256();
+        Console.log("IDEMPOTENCY_GRAPH_HASH_1", hash1);
+
+        ProcessorResult r2 = orch.orchestrate(ddEventJson);
+        Console.log("IDEMPOTENCY_SEND_2", r2);
+        assertNotNull(r2);
+        assertTrue(r2.isOk(), "Second send failed: " + (r2.getWhy() != null ? r2.getWhy() : "null"));
+
+        // optional: allow consumer to consume twice (transport may still deliver dup)
+        awaitSizeAtLeast(2);
+
+        // fetch hash2 and assert unchanged
+        awaitGraphNonEmpty();
+        String hash2 = fetchGraphCanonicalSha256();
+        Console.log("IDEMPOTENCY_GRAPH_HASH_2", hash2);
+
+        assertEquals(hash1, hash2, "Duplicate event must not change CGO graph snapshot (business idempotency)");
+    }
+
+
     //---------------------------------------------------------------------------------------
     private void awaitSizeAtLeast(int expected) throws Exception {
         long deadline = System.currentTimeMillis() + 10_000;
@@ -604,5 +661,89 @@ public class ProcessorOrchestratorIT {
         f.setAccessible(true);
         f.set(ProcessorOrchestrator.getInstance(), null);
     }
+
+    private String fetchGraphCanonicalSha256() throws Exception {
+        String raw = getString(CONSUMER_BASE + "/debug/graph");
+        JsonObject obj = JsonParser.parseString(raw).getAsJsonObject();
+
+        // If you later add a server-side snapshotHash, just return it here:
+        // if (obj.has("snapshotHash")) return obj.get("snapshotHash").getAsString();
+
+        String canonical = canonicalizeJson(obj);
+        return sha256Hex(canonical);
+    }
+
+
+    private static String canonicalizeJson(com.google.gson.JsonElement el) {
+        if (el == null || el.isJsonNull()) return "null";
+
+        if (el.isJsonPrimitive()) return el.toString();
+
+        if (el.isJsonArray()) {
+            StringBuilder sb = new StringBuilder();
+            sb.append("[");
+            boolean first = true;
+            for (com.google.gson.JsonElement child : el.getAsJsonArray()) {
+                if (!first) sb.append(",");
+                first = false;
+                sb.append(canonicalizeJson(child));
+            }
+            sb.append("]");
+            return sb.toString();
+        }
+
+        // object: sort keys for deterministic order
+        com.google.gson.JsonObject obj = el.getAsJsonObject();
+        java.util.List<String> keys = new java.util.ArrayList<>(obj.keySet());
+        java.util.Collections.sort(keys);
+
+        StringBuilder sb = new StringBuilder();
+        sb.append("{");
+        boolean first = true;
+        for (String k : keys) {
+            if (!first) sb.append(",");
+            first = false;
+            sb.append(com.google.gson.JsonParser.parseString("\"" + k.replace("\"", "\\\"") + "\"").toString());
+            sb.append(":");
+            sb.append(canonicalizeJson(obj.get(k)));
+        }
+        sb.append("}");
+        return sb.toString();
+    }
+
+    private static String sha256Hex(String s) {
+        try {
+            java.security.MessageDigest md = java.security.MessageDigest.getInstance("SHA-256");
+            byte[] bytes = md.digest(s.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            StringBuilder hex = new StringBuilder();
+            for (byte b : bytes) hex.append(String.format("%02x", b));
+            return hex.toString();
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    private static String getString(String url) throws Exception {
+        HttpRequest req = HttpRequest.newBuilder()
+                .uri(URI.create(url))
+                .GET()
+                .build();
+        HttpResponse<String> resp = http.send(req, HttpResponse.BodyHandlers.ofString());
+        if (resp.statusCode() != 200) {
+            throw new AssertionError("GET " + url + " failed: " + resp.statusCode() + " body=" + resp.body());
+        }
+        return resp.body();
+    }
+
+    private void awaitGraphNonEmpty() throws Exception {
+        long deadline = System.currentTimeMillis() + 10_000;
+        while (System.currentTimeMillis() < deadline) {
+            String raw = getString(CONSUMER_BASE + "/debug/graph");
+            if (raw != null && !raw.contains("\"status\":\"EMPTY\"")) return;
+            Thread.sleep(100);
+        }
+        fail("Timed out waiting for /debug/graph to become non-empty");
+    }
+
 
 }

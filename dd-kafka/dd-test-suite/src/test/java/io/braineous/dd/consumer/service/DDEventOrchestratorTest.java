@@ -51,7 +51,7 @@ public class DDEventOrchestratorTest {
         Console.log("test.dd.orchestrate.in", events.toString());
 
         DDEventOrchestrator orch = new DDEventOrchestrator();
-        GraphView view0 = orch.orchestrate(events);
+        GraphView view0 = orch.orchestrate(events.toString());
 
         assertNotNull(view0);
         assertTrue(view0 instanceof GraphSnapshot);
@@ -78,7 +78,7 @@ public class DDEventOrchestratorTest {
         Console.log("test.dd.orchestrate.empty.in", events.toString());
 
         DDEventOrchestrator orch = new DDEventOrchestrator();
-        GraphView view0 = orch.orchestrate(events);
+        GraphView view0 = orch.orchestrate(events.toString());
 
         assertNotNull(view0);
         assertTrue(view0 instanceof GraphSnapshot);
@@ -117,8 +117,8 @@ public class DDEventOrchestratorTest {
 
         DDEventOrchestrator orch = new DDEventOrchestrator();
 
-        GraphSnapshot v1 = (GraphSnapshot) orch.orchestrate(events);
-        GraphSnapshot v2 = (GraphSnapshot) orch.orchestrate(events);
+        GraphSnapshot v1 = (GraphSnapshot) orch.orchestrate(events.toString());
+        GraphSnapshot v2 = (GraphSnapshot) orch.orchestrate(events.toString());
 
         assertNotNull(v1);
         assertNotNull(v2);
@@ -172,7 +172,7 @@ public class DDEventOrchestratorTest {
         Console.log("test.dd.orchestrate.mixed.in", events.toString());
 
         DDEventOrchestrator orch = new DDEventOrchestrator();
-        GraphSnapshot view = (GraphSnapshot) orch.orchestrate(events);
+        GraphSnapshot view = (GraphSnapshot) orch.orchestrate(events.toString());
 
         assertNotNull(view);
 
@@ -215,7 +215,7 @@ public class DDEventOrchestratorTest {
         Console.log("test.dd.orchestrate.dup.in", events.toString());
 
         DDEventOrchestrator orch = new DDEventOrchestrator();
-        GraphSnapshot v1 = (GraphSnapshot) orch.orchestrate(events);
+        GraphSnapshot v1 = (GraphSnapshot) orch.orchestrate(events.toString());
 
         assertNotNull(v1);
         Console.log("test.dd.orchestrate.dup.out.nodes", "" + v1.nodes().size());
@@ -227,7 +227,7 @@ public class DDEventOrchestratorTest {
 
         // Determinism on re-run
         GraphBuilder.getInstance().clear();
-        GraphSnapshot v2 = (GraphSnapshot) orch.orchestrate(events);
+        GraphSnapshot v2 = (GraphSnapshot) orch.orchestrate(events.toString());
 
         Console.log("test.dd.orchestrate.dup.rerun.nodes", "" + v2.nodes().size());
         Console.log("test.dd.orchestrate.dup.rerun.hash", v2.snapshotHash());
@@ -290,8 +290,8 @@ public class DDEventOrchestratorTest {
 
         DDEventOrchestrator orch = new DDEventOrchestrator();
 
-        GraphSnapshot v1 = (GraphSnapshot) orch.orchestrate(events1);
-        GraphSnapshot v2 = (GraphSnapshot) orch.orchestrate(events2);
+        GraphSnapshot v1 = (GraphSnapshot) orch.orchestrate(events1.toString());
+        GraphSnapshot v2 = (GraphSnapshot) orch.orchestrate(events2.toString());
 
         assertNotNull(v1);
         assertNotNull(v2);
@@ -336,8 +336,8 @@ public class DDEventOrchestratorTest {
 
         DDEventOrchestrator orch = new DDEventOrchestrator();
 
-        GraphSnapshot v1 = (GraphSnapshot) orch.orchestrate(arr(e1));
-        GraphSnapshot v2 = (GraphSnapshot) orch.orchestrate(arr(e2));
+        GraphSnapshot v1 = (GraphSnapshot) orch.orchestrate(arr(e1).toString());
+        GraphSnapshot v2 = (GraphSnapshot) orch.orchestrate(arr(e2).toString());
 
         assertNotNull(v1);
         assertNotNull(v2);
@@ -385,8 +385,8 @@ public class DDEventOrchestratorTest {
 
         DDEventOrchestrator orch = new DDEventOrchestrator();
 
-        GraphSnapshot v1 = (GraphSnapshot) orch.orchestrate(arr(e1));
-        GraphSnapshot v2 = (GraphSnapshot) orch.orchestrate(arr(e2));
+        GraphSnapshot v1 = (GraphSnapshot) orch.orchestrate(arr(e1).toString());
+        GraphSnapshot v2 = (GraphSnapshot) orch.orchestrate(arr(e2).toString());
 
         assertNotNull(v1);
         assertNotNull(v2);
@@ -437,8 +437,8 @@ public class DDEventOrchestratorTest {
 
         DDEventOrchestrator orch = new DDEventOrchestrator();
 
-        GraphSnapshot v1 = (GraphSnapshot) orch.orchestrate(events1);
-        GraphSnapshot v2 = (GraphSnapshot) orch.orchestrate(events2);
+        GraphSnapshot v1 = (GraphSnapshot) orch.orchestrate(events1.toString());
+        GraphSnapshot v2 = (GraphSnapshot) orch.orchestrate(events2.toString());
 
         assertNotNull(v1);
         assertNotNull(v2);
@@ -498,8 +498,8 @@ public class DDEventOrchestratorTest {
 
         DDEventOrchestrator orch = new DDEventOrchestrator();
 
-        GraphSnapshot v1 = (GraphSnapshot) orch.orchestrate(events1);
-        GraphSnapshot v2 = (GraphSnapshot) orch.orchestrate(events2);
+        GraphSnapshot v1 = (GraphSnapshot) orch.orchestrate(events1.toString());
+        GraphSnapshot v2 = (GraphSnapshot) orch.orchestrate(events2.toString());
 
         assertNotNull(v1);
         assertNotNull(v2);
@@ -557,8 +557,8 @@ public class DDEventOrchestratorTest {
 
         DDEventOrchestrator orch = new DDEventOrchestrator();
 
-        GraphSnapshot v1 = (GraphSnapshot) orch.orchestrate(arr(e1));
-        GraphSnapshot v2 = (GraphSnapshot) orch.orchestrate(arr(e2));
+        GraphSnapshot v1 = (GraphSnapshot) orch.orchestrate(arr(e1).toString());
+        GraphSnapshot v2 = (GraphSnapshot) orch.orchestrate(arr(e2).toString());
 
         assertNotNull(v1);
         assertNotNull(v2);

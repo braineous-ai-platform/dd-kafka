@@ -28,6 +28,8 @@ public class IngestionResource {
     public String createRequest(
             String body
     ) {
+        //TODO: guardrails
+
         System.out.println("____INGESTION_PRODUCER_____");
         System.out.println(body);
         System.out.println("___________________________");

@@ -1,5 +1,7 @@
 package io.braineous.dd.consumer.processor;
 
+import ai.braineous.rag.prompt.cgo.api.GraphView;
+import ai.braineous.rag.prompt.models.cgo.graph.GraphSnapshot;
 import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.MediaType;
 
@@ -10,13 +12,34 @@ public class DebugResource {
     @Path("/captures/size")
     @Produces(MediaType.TEXT_PLAIN)
     public int captureSize() {
-        return Ingestion.getStore().size();
+        CaptureStore store = CaptureStore.getInstance();
+        return store.size();
     }
 
     @POST
     @Path("/captures/clear")
     public void clearCaptures() {
-        Ingestion.getStore().clear();
+        CaptureStore store = CaptureStore.getInstance();
+        store.clear();
     }
+
+
+    @GET
+    @Path("/graph")
+    @Produces(MediaType.APPLICATION_JSON)
+    public String graph() {
+        CaptureStore store = CaptureStore.getInstance();
+        GraphView view = store.getSnapshot();
+        if (view == null) {
+            return "{\"status\":\"EMPTY\"}";
+        }
+        // Prefer: if GraphSnapshot has toJson()
+        if (view instanceof GraphSnapshot snap) {
+            return snap.toJson().toString();
+        }
+        // fallback: minimal
+        return "{\"status\":\"OK\"}";
+    }
+
 
 }
