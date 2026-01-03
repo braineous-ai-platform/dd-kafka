@@ -1,6 +1,8 @@
 package io.braineous.dd.processor;
 
-public class DDIngestionHttpPoster implements HttpPoster{
+import io.braineous.dd.core.processor.HttpPoster;
+
+public class DDIngestionHttpPoster implements HttpPoster {
 
     //TODO: make this dynamic and env-agnostic with config service
     private static final String PRODUCER_BASE = "http://localhost:8080";

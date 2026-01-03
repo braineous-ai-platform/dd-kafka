@@ -4,6 +4,7 @@ import ai.braineous.rag.prompt.observe.Console;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import io.braineous.dd.core.model.DDEvent;
+import io.braineous.dd.core.processor.HttpPoster;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;

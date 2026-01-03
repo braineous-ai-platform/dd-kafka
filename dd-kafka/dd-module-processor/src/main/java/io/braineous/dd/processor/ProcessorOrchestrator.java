@@ -2,7 +2,10 @@ package io.braineous.dd.processor;
 
 
 import com.google.gson.JsonObject;
+
 import io.braineous.dd.core.model.Why;
+import io.braineous.dd.core.processor.HttpPoster;
+import io.braineous.dd.core.processor.JsonSerializer;
 
 public class ProcessorOrchestrator {
     private static final ProcessorOrchestrator orchestrator = new ProcessorOrchestrator();
@@ -32,8 +35,10 @@ public class ProcessorOrchestrator {
         // Direction: choose one transport later (Kafka emit OR REST call).
         // For now route through a client stub so wiring stays stable.
         String ingestionEndpoint = "/api/ingestion";
-        return DDProducerClient.getInstance().invoke(httpPoster,
-                new GsonJsonSerializer(),
+        JsonSerializer serializer = new GsonJsonSerializer();
+        return DDProducerClient.getInstance().invoke(
+                this.httpPoster,
+                serializer,
                 ingestionEndpoint,
                 ddEventJson,
                 ddEventJson);

@@ -1,6 +1,8 @@
 package io.braineous.dd.processor;
 
 import com.google.gson.JsonObject;
+import io.braineous.dd.core.processor.HttpPoster;
+import io.braineous.dd.core.processor.JsonSerializer;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.*;
