@@ -1,4 +1,4 @@
-package io.braineous.dd.processor;
+package io.braineous.dd.core.processor;
 
 import io.braineous.dd.core.processor.JsonSerializer;
 

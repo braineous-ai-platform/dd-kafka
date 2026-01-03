@@ -60,6 +60,11 @@
             <artifactId>dd-module-core</artifactId>
             <version>1.0.0</version>
         </dependency>
+        <dependency>
+            <groupId>io.braineous</groupId>
+            <artifactId>dd-module-dlq</artifactId>
+            <version>1.0.0</version>
+        </dependency>
 
         <!-- quarkus kafka -->
         <dependency>

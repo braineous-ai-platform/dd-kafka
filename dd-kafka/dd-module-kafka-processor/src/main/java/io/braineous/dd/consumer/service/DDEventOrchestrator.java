@@ -13,6 +13,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 public class DDEventOrchestrator {
     private LLMBridge llmBridge = new CausalLLMBridge();
 
+
     public GraphView orchestrate(String ingestionStr) {
         try {
             LLMContext context = new LLMContext();
@@ -21,9 +22,9 @@ public class DDEventOrchestrator {
 
             JsonArray ddEvents = new JsonArray();
             JsonElement ddEventElement = JsonParser.parseString(ingestionStr);
-            if(ddEventElement.isJsonArray()){
+            if (ddEventElement.isJsonArray()) {
                 ddEvents = ddEventElement.getAsJsonArray();
-            }else {
+            } else {
                 ddEvents.add(ddEventElement.getAsJsonObject());
             }
 
@@ -37,9 +38,13 @@ public class DDEventOrchestrator {
             return this.llmBridge.submit(context);
 
         } catch (Exception e) {
-            //TODO: add Why
-            e.printStackTrace();
-            throw new RuntimeException(e.getMessage());
+            //TODO: send_to_dlq
+
+
+            //also print in service log
+            //TODO: think what to return or throw exception
+            return null;
         }
     }
+
 }

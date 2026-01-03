@@ -6,6 +6,8 @@ import com.google.gson.JsonObject;
 import io.braineous.dd.core.model.Why;
 import io.braineous.dd.core.processor.HttpPoster;
 import io.braineous.dd.core.processor.JsonSerializer;
+import io.braineous.dd.processor.client.DDProducerClient;
+import io.braineous.dd.core.processor.GsonJsonSerializer;
 
 public class ProcessorOrchestrator {
     private static final ProcessorOrchestrator orchestrator = new ProcessorOrchestrator();
