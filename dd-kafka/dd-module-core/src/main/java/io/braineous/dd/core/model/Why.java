@@ -1,4 +1,4 @@
-package io.braineous.dd.processor;
+package io.braineous.dd.core.model;
 
 public class Why {
 
@@ -34,4 +34,9 @@ public class Why {
                 ", details='" + details + '\'' +
                 '}';
     }
+
+    public String toJson() {
+        return new com.google.gson.Gson().toJson(this);
+    }
+
 }

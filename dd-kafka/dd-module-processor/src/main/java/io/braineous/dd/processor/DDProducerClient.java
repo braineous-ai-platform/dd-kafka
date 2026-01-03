@@ -1,6 +1,7 @@
 package io.braineous.dd.processor;
 
 import com.google.gson.JsonObject;
+import io.braineous.dd.core.model.Why;
 
 public class DDProducerClient {
     private static final DDProducerClient client = new DDProducerClient();
