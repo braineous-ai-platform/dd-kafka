@@ -2,6 +2,7 @@ package io.braineous.dd.consumer.processor;
 
 import ai.braineous.rag.prompt.cgo.api.GraphView;
 import ai.braineous.rag.prompt.models.cgo.graph.GraphSnapshot;
+import io.braineous.dd.core.model.CaptureStore;
 import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.MediaType;
 

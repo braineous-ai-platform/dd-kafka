@@ -13,10 +13,10 @@
 
   <modules>
     <module>dd-pack</module>
-    <module>dd-module-dlq</module>
     <module>dd-module-processor</module>
     <module>dd-module-kafka-producer</module>
     <module>dd-module-kafka-processor</module>
+    <module>dd-module-dlq</module>
     <module>dd-module-core</module>
     <module>dd-test-suite</module>
     <module>dd-it-suite</module>

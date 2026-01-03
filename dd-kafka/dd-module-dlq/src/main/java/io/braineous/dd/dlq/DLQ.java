@@ -1,14 +1,8 @@
-package io.braineous.dd.consumer.processor;
+package io.braineous.dd.dlq;
 
-import ai.braineous.rag.prompt.cgo.api.GraphView;
-import ai.braineous.rag.prompt.models.cgo.graph.GraphSnapshot;
-import ai.braineous.rag.prompt.observe.Console;
-import io.braineous.dd.consumer.service.DDEventOrchestrator;
-import io.braineous.dd.core.model.CaptureStore;
+
 import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
 
-import org.eclipse.microprofile.reactive.messaging.Incoming;
 
 
 /**
@@ -16,13 +10,10 @@ import org.eclipse.microprofile.reactive.messaging.Incoming;
  * The result is pushed to the "quotes" Kafka topic.
  */
 @ApplicationScoped
-public class Ingestion {
-
-    @Inject
-    private DDEventOrchestrator orchestrator;
+public class DLQ {
 
 
-    @Incoming("ingestion_in")
+   /* @Incoming("ingestion_in")
     public void process(String ingestionJson) {
         CaptureStore store = CaptureStore.getInstance();
 
@@ -39,6 +30,6 @@ public class Ingestion {
         GraphView view = this.orchestrator.orchestrate(ingestionJson);
 
         store.setSnapshot((GraphSnapshot) view);
-    }
+    }*/
 
 }

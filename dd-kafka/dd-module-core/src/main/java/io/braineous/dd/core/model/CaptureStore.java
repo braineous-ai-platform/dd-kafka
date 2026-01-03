@@ -1,10 +1,8 @@
-package io.braineous.dd.consumer.processor;
+package io.braineous.dd.core.model;
 
 import ai.braineous.rag.prompt.models.cgo.graph.GraphSnapshot;
 import ai.braineous.rag.prompt.observe.Console;
-import jakarta.enterprise.context.ApplicationScoped;
 
-@ApplicationScoped
 public class CaptureStore {
     private static final CaptureStore store = new CaptureStore();
 

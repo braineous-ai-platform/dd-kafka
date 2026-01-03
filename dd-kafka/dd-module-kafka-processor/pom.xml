@@ -55,6 +55,11 @@
             <artifactId>cgo-core</artifactId>
             <version>1.0.0-SNAPSHOT</version>
         </dependency>
+        <dependency>
+            <groupId>io.braineous</groupId>
+            <artifactId>dd-module-core</artifactId>
+            <version>1.0.0</version>
+        </dependency>
 
         <!-- quarkus kafka -->
         <dependency>
