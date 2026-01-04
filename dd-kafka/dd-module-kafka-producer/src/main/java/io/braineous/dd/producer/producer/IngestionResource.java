@@ -15,7 +15,7 @@ import org.eclipse.microprofile.reactive.messaging.Emitter;
 public class IngestionResource {
 
     @Inject
-    @Channel("ingestion_out")
+    @Channel("ingestion")
     Emitter<String> emitter;
 
     /**

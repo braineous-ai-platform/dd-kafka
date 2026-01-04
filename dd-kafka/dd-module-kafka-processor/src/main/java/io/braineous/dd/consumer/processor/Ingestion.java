@@ -22,7 +22,7 @@ public class Ingestion {
     private DDEventOrchestrator orchestrator;
 
 
-    @Incoming("ingestion_in")
+    @Incoming("ingestion")
     public void process(String ingestionJson) {
         CaptureStore store = CaptureStore.getInstance();
 

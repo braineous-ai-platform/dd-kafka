@@ -38,12 +38,14 @@ public class DDEventOrchestrator {
             return this.llmBridge.submit(context);
 
         } catch (Exception e) {
-            //TODO: send_to_dlq
+            /*//TODO: send_to_dlq
 
 
             //also print in service log
             //TODO: think what to return or throw exception
-            return null;
+            return null;*/
+            throw new RuntimeException(e);
+            
         }
     }
 
