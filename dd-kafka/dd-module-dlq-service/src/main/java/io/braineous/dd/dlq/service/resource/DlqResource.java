@@ -16,12 +16,20 @@ public class DlqResource {
  @POST
  @Path("/system_failure")
  public void handleSystemFailure(String payload){
+  if(payload == null || payload.trim().length() == 0){
+   return;
+  }
+
    this.processor.handleSystemFailure(payload);
  }
 
  @POST
  @Path("/domain_failure")
  public void handleDomainFailure(String payload) {
+  if(payload == null || payload.trim().length() == 0){
+   return;
+  }
+
    this.processor.handleDomainFailure(payload);
  }
 }
