@@ -20,15 +20,15 @@ public class DlqProcessor {
     @Channel("dead_letter_domain_out")
     Emitter<String> domainOut;
 
-    @Incoming("dead_letter_system_in")
+
     public void handleSystemFailure(String payload){
-        Console.log("system_exception", payload);
+        Console.log("system_exception_emit", payload);
         systemOut.send(payload);
     }
 
-    @Incoming("dead_letter_domain_in")
+
     public void handleDomainFailure(String payload) {
-        Console.log("domain_exception", payload);
+        Console.log("domain_exception_emit", payload);
         domainOut.send(payload);
     }
 }

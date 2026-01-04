@@ -5,7 +5,7 @@ import io.braineous.dd.core.processor.HttpPoster;
 public class DLQHttpPoster implements HttpPoster {
 
     //TODO: make this dynamic and env-agnostic with config service
-    private static final String PRODUCER_BASE = "http://localhost:8082";
+    private static final String PRODUCER_BASE = "http://localhost:8082/dlq";
 
     @Override
     public int post(String endpoint, String jsonBody) throws Exception {
