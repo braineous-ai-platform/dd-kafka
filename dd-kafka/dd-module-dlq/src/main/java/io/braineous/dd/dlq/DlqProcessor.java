@@ -13,11 +13,11 @@ import org.eclipse.microprofile.reactive.messaging.Incoming;
 public class DlqProcessor {
 
     @Inject
-    @Channel("dead_letter_system_out")
+    @Channel("dlq_system_out")
     private Emitter<String> systemOut;
 
     @Inject
-    @Channel("dead_letter_domain_out")
+    @Channel("dlq_domain_out")
     private Emitter<String> domainOut;
 
     public Emitter<String> getSystemOut() {
@@ -45,6 +45,18 @@ public class DlqProcessor {
 
         Console.log("domain_exception_emit", payload);
         domainOut.send(payload);
+    }
+
+    @Incoming("dlq_system_in")
+    public void consumeSystemFailure(String payload){
+
+        Console.log("system_failure_consume", payload);
+    }
+
+    @Incoming("dlq_domain_in")
+    public void consumeDomainFailure(String payload){
+
+        Console.log("domain_failure_consume", payload);
     }
 }
 
