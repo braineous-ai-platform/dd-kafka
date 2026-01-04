@@ -16,8 +16,6 @@ import static org.junit.jupiter.api.Assertions.*;
 @QuarkusTest
 public class DLQIT {
 
-    private HttpPoster poster = new DLQHttpPoster();
-
     @BeforeEach
     void setup() {
         CaptureStore.getInstance().clear();
@@ -28,6 +26,7 @@ public class DLQIT {
 
     @Test
     void domainFailure_routes_and_records() {
+        HttpPoster poster = new DLQHttpPoster();
         JsonObject ddEventJson = new JsonObject();
         ddEventJson.addProperty("k", "v");
 
@@ -43,6 +42,7 @@ public class DLQIT {
 
     @Test
     void systemFailure_routes_and_records() {
+        HttpPoster poster = new DLQHttpPoster();
         JsonObject ddEventJson = new JsonObject();
         ddEventJson.addProperty("sys", "boom");
 
@@ -57,6 +57,7 @@ public class DLQIT {
 
     @Test
     void nullInput_does_nothing() {
+        HttpPoster poster = new DLQHttpPoster();
         DLQOrchestrator orch = DLQOrchestrator.getInstance();
         orch.setHttpPoster(poster);
         orch.orchestrateDomainFailure(null);
