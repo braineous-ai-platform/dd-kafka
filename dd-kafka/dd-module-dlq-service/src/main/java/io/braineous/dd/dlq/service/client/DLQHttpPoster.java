@@ -1,4 +1,4 @@
-package io.braineous.dd.dlq.client;
+package io.braineous.dd.dlq.service.client;
 
 import io.braineous.dd.core.processor.HttpPoster;
 

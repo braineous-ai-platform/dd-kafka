@@ -1,4 +1,4 @@
-package io.braineous.dd.dlq.client;
+package io.braineous.dd.dlq.service.client;
 
 import com.google.gson.JsonObject;
 import io.braineous.dd.core.model.Why;
