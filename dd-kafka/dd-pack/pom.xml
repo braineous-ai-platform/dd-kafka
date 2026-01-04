@@ -16,7 +16,7 @@
     <dependencies>
         <dependency>
             <groupId>io.braineous</groupId>
-            <artifactId>dd-module-ordering</artifactId>
+            <artifactId>dd-module-core</artifactId>
             <version>1.0.0</version>
         </dependency>
         <dependency>

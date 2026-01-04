@@ -49,6 +49,12 @@
             <scope>test</scope>
         </dependency>
 
+        <dependency>
+            <groupId>io.braineous</groupId>
+            <artifactId>dd-module-core</artifactId>
+            <version>1.0.0</version>
+        </dependency>
+
         <!-- CGO (Causal Graph Orchestrator -->
         <dependency>
             <groupId>ai.braineous</groupId>
