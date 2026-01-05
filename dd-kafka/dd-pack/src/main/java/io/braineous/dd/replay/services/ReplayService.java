@@ -60,6 +60,8 @@ public class ReplayService {
             return ReplayResult.empty(request);
         }
 
+        events = new java.util.ArrayList<>(events);
+
         // deterministic ordering (timestamp, then stable tie-breaker)
         events.sort((a, b) -> {
             int c = a.timestamp().compareTo(b.timestamp());

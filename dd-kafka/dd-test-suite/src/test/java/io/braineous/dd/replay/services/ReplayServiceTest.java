@@ -370,6 +370,116 @@ public class ReplayServiceTest {
         org.junit.jupiter.api.Assertions.assertEquals(callsA, callsB);
     }
 
+    @Test
+    public void parity_timeWindow_vs_timeObjectKey_same_events_same_result_and_same_orchestration() {
+
+        // arrange
+        java.util.List<ReplayEvent> events = java.util.List.of(
+                new ReplayEvent("E-2", "{\"a\":2}", java.time.Instant.parse("2026-01-05T10:00:02Z")),
+                new ReplayEvent("E-1", "{\"a\":1}", java.time.Instant.parse("2026-01-05T10:00:01Z")),
+                new ReplayEvent("E-3", "{\"a\":3}", java.time.Instant.parse("2026-01-05T10:00:03Z"))
+        );
+
+        ReplayStore store = storeReturning(java.util.List.of(), java.util.List.of(), events, events);
+
+        java.util.List<com.google.gson.JsonObject> callsA = new java.util.ArrayList<>();
+        java.util.List<com.google.gson.JsonObject> callsB = new java.util.ArrayList<>();
+
+        ReplayService svcA = serviceSpy(store, callsA);
+        ReplayService svcB = serviceSpy(store, callsB);
+
+        ReplayRequest req = org.mockito.Mockito.mock(ReplayRequest.class);
+        org.mockito.Mockito.when(req.limitOrDefault(500)).thenReturn(500);
+
+        // act
+        ReplayResult a = svcA.replayByTimeWindow(req);
+        ReplayResult b = svcB.replayByTimeObjectKey(req);
+
+        // assert
+        org.junit.jupiter.api.Assertions.assertTrue(a.ok());
+        org.junit.jupiter.api.Assertions.assertTrue(b.ok());
+        org.junit.jupiter.api.Assertions.assertEquals(a.replayedCount(), b.replayedCount());
+        org.junit.jupiter.api.Assertions.assertEquals(a.matchedCount(), b.matchedCount());
+
+        org.junit.jupiter.api.Assertions.assertEquals(callsA, callsB);
+        org.junit.jupiter.api.Assertions.assertEquals(a.replayedCount(), callsA.size());
+        org.junit.jupiter.api.Assertions.assertEquals(b.replayedCount(), callsB.size());
+    }
+
+    @Test
+    public void parity_timeWindow_vs_timeObjectKey_bad_payloads_skipped_consistently() {
+
+        // arrange
+        java.util.List<ReplayEvent> events = java.util.List.of(
+                new ReplayEvent("E-1", "{\"a\":1}", java.time.Instant.parse("2026-01-05T10:00:01Z")),
+                new ReplayEvent("E-bad", "{not-json}", java.time.Instant.parse("2026-01-05T10:00:02Z")),
+                new ReplayEvent("E-2", "{\"a\":2}", java.time.Instant.parse("2026-01-05T10:00:03Z"))
+        );
+
+        ReplayStore store = storeReturning(java.util.List.of(), java.util.List.of(), events, events);
+
+        java.util.List<com.google.gson.JsonObject> callsA = new java.util.ArrayList<>();
+        java.util.List<com.google.gson.JsonObject> callsB = new java.util.ArrayList<>();
+
+        ReplayService svcA = serviceSpy(store, callsA);
+        ReplayService svcB = serviceSpy(store, callsB);
+
+        ReplayRequest req = org.mockito.Mockito.mock(ReplayRequest.class);
+        org.mockito.Mockito.when(req.limitOrDefault(500)).thenReturn(500);
+
+        // act
+        ReplayResult a = svcA.replayByTimeWindow(req);
+        ReplayResult b = svcB.replayByTimeObjectKey(req);
+
+        // assert
+        org.junit.jupiter.api.Assertions.assertTrue(a.ok());
+        org.junit.jupiter.api.Assertions.assertTrue(b.ok());
+
+        org.junit.jupiter.api.Assertions.assertEquals(3, a.matchedCount());
+        org.junit.jupiter.api.Assertions.assertEquals(3, b.matchedCount());
+        org.junit.jupiter.api.Assertions.assertEquals(2, a.replayedCount());
+        org.junit.jupiter.api.Assertions.assertEquals(2, b.replayedCount());
+
+        org.junit.jupiter.api.Assertions.assertEquals(callsA, callsB);
+    }
+
+    @Test
+    public void parity_timeWindow_vs_timeObjectKey_respects_limit_identically() {
+
+        // arrange
+        java.util.List<ReplayEvent> events = java.util.List.of(
+                new ReplayEvent("E-1", "{\"a\":1}", java.time.Instant.parse("2026-01-05T10:00:01Z")),
+                new ReplayEvent("E-2", "{\"a\":2}", java.time.Instant.parse("2026-01-05T10:00:02Z")),
+                new ReplayEvent("E-3", "{\"a\":3}", java.time.Instant.parse("2026-01-05T10:00:03Z")),
+                new ReplayEvent("E-4", "{\"a\":4}", java.time.Instant.parse("2026-01-05T10:00:04Z"))
+        );
+
+        ReplayStore store = storeReturning(java.util.List.of(), java.util.List.of(), events, events);
+
+        java.util.List<com.google.gson.JsonObject> callsA = new java.util.ArrayList<>();
+        java.util.List<com.google.gson.JsonObject> callsB = new java.util.ArrayList<>();
+
+        ReplayService svcA = serviceSpy(store, callsA);
+        ReplayService svcB = serviceSpy(store, callsB);
+
+        ReplayRequest req = org.mockito.Mockito.mock(ReplayRequest.class);
+        org.mockito.Mockito.when(req.limitOrDefault(500)).thenReturn(2);
+
+        // act
+        ReplayResult a = svcA.replayByTimeWindow(req);
+        ReplayResult b = svcB.replayByTimeObjectKey(req);
+
+        // assert
+        org.junit.jupiter.api.Assertions.assertTrue(a.ok());
+        org.junit.jupiter.api.Assertions.assertTrue(b.ok());
+        org.junit.jupiter.api.Assertions.assertEquals(4, a.matchedCount());
+        org.junit.jupiter.api.Assertions.assertEquals(4, b.matchedCount());
+        org.junit.jupiter.api.Assertions.assertEquals(2, a.replayedCount());
+        org.junit.jupiter.api.Assertions.assertEquals(2, b.replayedCount());
+
+        org.junit.jupiter.api.Assertions.assertEquals(callsA, callsB);
+    }
+
 
 
     //--------------------------------------------------------------
