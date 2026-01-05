@@ -1,5 +1,6 @@
 package io.braineous.dd.replay.services;
 
+import ai.braineous.rag.prompt.observe.Console;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import io.braineous.dd.processor.ProcessorOrchestrator;
@@ -14,8 +15,14 @@ public class ReplayService {
     @Inject
     private ReplayStore store;
 
+    //To facilate unit tests with an in-memory store. System store will be based on MongoDB
+    void setStore(ReplayStore store){
+        this.store = store;
+    }
+
     public ReplayResult replayByTimeWindow(ReplayRequest request){
         if (request == null) return ReplayResult.badRequest("request_null");
+        if (store == null) return ReplayResult.badRequest("store_null");
 
         java.util.List<ReplayEvent> events = store.findByTimeWindow(request);
         return replayEvents(events, request);
@@ -23,6 +30,7 @@ public class ReplayService {
 
     public ReplayResult replayByTimeObjectKey(ReplayRequest request){
         if (request == null) return ReplayResult.badRequest("request_null");
+        if (store == null) return ReplayResult.badRequest("store_null");
 
         java.util.List<ReplayEvent> events = store.findByTimeObjectKey(request);
         return replayEvents(events, request);
@@ -32,6 +40,7 @@ public class ReplayService {
 
     public ReplayResult replayByDomainDlqId(ReplayRequest request){
         if (request == null) return ReplayResult.badRequest("request_null");
+        if (store == null) return ReplayResult.badRequest("store_null");
 
         java.util.List<ReplayEvent> events = store.findByDomainDlqId(request);
         return replayEvents(events, request);
@@ -39,13 +48,14 @@ public class ReplayService {
 
     public ReplayResult replayBySystemDlqId(ReplayRequest request){
         if (request == null) return ReplayResult.badRequest("request_null");
+        if (store == null) return ReplayResult.badRequest("store_null");
 
         java.util.List<ReplayEvent> events = store.findBySystemDlqId(request);
         return replayEvents(events, request);
     }
 
     //---------helper-----------------------------------------------
-    public ReplayResult replayEvents(java.util.List<ReplayEvent> events, ReplayRequest request) {
+    ReplayResult replayEvents(java.util.List<ReplayEvent> events, ReplayRequest request) {
         if (events == null || events.isEmpty()) {
             return ReplayResult.empty(request);
         }
@@ -63,14 +73,22 @@ public class ReplayService {
         for (ReplayEvent e : events) {
             if (replayed >= limit) break;
 
-            // re-inject via ProcessorOrchestrator on SAME stream
-            // (stream name stays constant; transport mapping internal)
-            JsonObject payloadJson = JsonParser.parseString(e.payload()).getAsJsonObject();
-            ProcessorOrchestrator.getInstance().orchestrate(payloadJson);
-
-            replayed++;
+            try {
+                JsonObject payloadJson = JsonParser.parseString(e.payload()).getAsJsonObject();
+                orchestrate(payloadJson);
+                replayed++;
+            } catch (Exception ex) {
+                Console.log("replay_bad_payload_skip", e.payload());
+                Console.log("replay_bad_payload_err", ex.getClass().getSimpleName());
+                // skip and continue
+            }
         }
 
         return ReplayResult.ok(request, replayed, events.size());
     }
+
+    void orchestrate(JsonObject payloadJson){
+        ProcessorOrchestrator.getInstance().orchestrate(payloadJson);
+    }
+
 }
