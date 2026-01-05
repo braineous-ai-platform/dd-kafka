@@ -8,15 +8,17 @@ import io.braineous.dd.replay.model.ReplayEvent;
 import io.braineous.dd.replay.model.ReplayRequest;
 import io.braineous.dd.replay.model.ReplayResult;
 import io.braineous.dd.replay.persistence.ReplayStore;
+import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
+@ApplicationScoped
 public class ReplayService {
 
     @Inject
     private ReplayStore store;
 
     //To facilate unit tests with an in-memory store. System store will be based on MongoDB
-    void setStore(ReplayStore store){
+    public void setStore(ReplayStore store){
         this.store = store;
     }
 
