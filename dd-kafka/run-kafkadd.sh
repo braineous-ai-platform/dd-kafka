@@ -1,1 +1,2 @@
-mvn -DskipTests package && docker compose -f docker-compose.yml -f docker-compose-test.yml up --build
+mvn -DskipTests package && docker compose -f docker-compose.yml up --build
+mongosh "mongodb://localhost:27018" --eval "db.runCommand({ ping: 1 })"

@@ -1,4 +1,18 @@
 services:
+  mongo:
+    image: mongo:7
+    container_name: dd-mongo
+    restart: unless-stopped
+    ports:
+      - "27018:27017"   # optional (host tooling)
+    volumes:
+      - dd_mongo_data:/data/db
+    healthcheck:
+      test: [ "CMD", "mongosh", "--quiet", "mongodb://localhost:27017/admin", "--eval", "db.runCommand({ ping: 1 }).ok" ]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
   zookeeper:
     image: confluentinc/cp-zookeeper:7.6.1
     environment:
@@ -85,3 +99,6 @@ services:
       - kafka
     ports:
       - "8080:8080"
+
+volumes:
+  dd_mongo_data:
