@@ -1,1 +1,1 @@
-mvn -DskipTests package && docker compose up --build
+mvn -DskipTests package && docker compose -f docker-compose.yml -f docker-compose-test.yml up --build
