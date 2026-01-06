@@ -5,8 +5,6 @@ import com.google.gson.JsonObject;
 import io.braineous.dd.core.processor.HttpPoster;
 import io.braineous.dd.core.processor.JsonSerializer;
 import io.braineous.dd.dlq.model.DLQResult;
-import io.braineous.dd.dlq.service.client.DLQClient;
-import io.braineous.dd.dlq.service.client.DLQHttpPoster;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.*;

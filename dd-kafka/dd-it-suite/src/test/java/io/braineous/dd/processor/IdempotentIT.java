@@ -21,7 +21,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 public class IdempotentIT {
 
-    private static final String CONSUMER_BASE = System.getProperty("dd.consumer.baseUrl", "http://localhost:8081");
+    private static final String CONSUMER_BASE = System.getProperty("dd.consumer.baseUrl", "http://localhost:8082");
     private static final HttpClient http = HttpClient.newHttpClient();
 
     @BeforeEach

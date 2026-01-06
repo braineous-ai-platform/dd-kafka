@@ -1,0 +1,1 @@
+mvn -DskipTests package && docker compose up --build
