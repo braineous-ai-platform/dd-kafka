@@ -35,6 +35,14 @@ public class ReplayResult {
         return r;
     }
 
+    public static ReplayResult fail(String reason) {
+        ReplayResult r = new ReplayResult();
+        r.ok = false;
+        r.reason = reason;
+        return r;
+    }
+
+
     public boolean ok() { return ok; }
     public String replayId() { return replayId; }
     public int replayedCount() { return replayedCount; }
