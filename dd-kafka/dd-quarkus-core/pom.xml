@@ -9,9 +9,9 @@
         <version>1.0.0</version>
     </parent>
 
-    <artifactId>dd-module-dlq</artifactId>
+    <artifactId>dd-quarkus-core</artifactId>
     <packaging>jar</packaging>
-    <name>dd-module-dlq</name>
+    <name>dd-quarkus-core</name>
 
     <properties>
         <compiler-plugin.version>3.14.1</compiler-plugin.version>
@@ -44,11 +44,6 @@
             <version>1.0.0</version>
         </dependency>
         <dependency>
-            <groupId>io.braineous</groupId>
-            <artifactId>dd-quarkus-core</artifactId>
-            <version>1.0.0</version>
-        </dependency>
-        <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter</artifactId>
             <scope>test</scope>
@@ -57,7 +52,7 @@
         <!-- quarkus kafka -->
         <dependency>
             <groupId>io.quarkus</groupId>
-            <artifactId>quarkus-messaging-kafka</artifactId>
+            <artifactId>quarkus-rest-jackson</artifactId>
         </dependency>
         <dependency>
             <groupId>io.quarkus</groupId>
