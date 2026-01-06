@@ -1,18 +1,23 @@
 package io.braineous.dd.processor.client;
 
+import ai.braineous.cgo.config.ConfigService;
+import io.braineous.dd.core.config.DDConfigService;
 import io.braineous.dd.core.processor.HttpPoster;
 
 public class DDIngestionHttpPoster implements HttpPoster {
 
-    //TODO: make this dynamic and env-agnostic with config service
-    private static final String PRODUCER_BASE = "http://localhost:8081";
-
     @Override
     public int post(String endpoint, String jsonBody) throws Exception {
+        DDConfigService ddCfgSvc = new DDConfigService();
+        ConfigService cfg = ddCfgSvc.configService();
+        String env = cfg.getProperty(DDConfigService.dd_env);
+
+        String base = ddCfgSvc.internalProducerBase(env);
+
         java.net.http.HttpClient client = java.net.http.HttpClient.newHttpClient();
 
         java.net.http.HttpRequest request = java.net.http.HttpRequest.newBuilder()
-                .uri(java.net.URI.create(PRODUCER_BASE + "/" + endpoint))
+                .uri(java.net.URI.create(base + "/" + endpoint))
                 .header("Content-Type", "application/json")
                 .POST(java.net.http.HttpRequest.BodyPublishers.ofString(jsonBody))
                 .build();
