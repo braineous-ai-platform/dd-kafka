@@ -53,7 +53,11 @@ public class MongoDLQStore implements DLQStore {
         org.bson.Document doc = new org.bson.Document()
                 .append("dlqId", dlqId)
                 .append("kind", "domain")
+
+                //very important meta data to map a system event (kafka)
+                //to a business event (CGO)
                 .append("createdAt", java.util.Date.from(java.time.Instant.now()))
+
                 .append("payloadSha256", sha256(payload))
                 .append("payload", payload);
 
@@ -73,7 +77,11 @@ public class MongoDLQStore implements DLQStore {
         org.bson.Document doc = new org.bson.Document()
                 .append("dlqId", dlqId)
                 .append("kind", "system")
+
+                //very important meta data to map a system event (kafka)
+                //to a business event (CGO)
                 .append("createdAt", java.util.Date.from(java.time.Instant.now()))
+
                 .append("payloadSha256", sha256(payload))
                 .append("payload", payload);
 
