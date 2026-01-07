@@ -12,7 +12,10 @@ public class MongoDLQStore implements DLQStore {
     private final java.util.concurrent.atomic.AtomicBoolean systemIndexed =
             new java.util.concurrent.atomic.AtomicBoolean(false);
 
-    private static void ensureIndexes(com.mongodb.client.MongoCollection<org.bson.Document> col) {
+    @Inject
+    com.mongodb.client.MongoClient mongoClient;
+
+    private void ensureIndexes(com.mongodb.client.MongoCollection<org.bson.Document> col) {
 
         // unique dlqId ONLY when dlqId exists
         col.createIndex(
@@ -25,9 +28,6 @@ public class MongoDLQStore implements DLQStore {
         col.createIndex(new org.bson.Document("createdAt", -1));
         col.createIndex(new org.bson.Document("payloadSha256", 1));
     }
-
-    @Inject
-    com.mongodb.client.MongoClient mongoClient;
 
     private com.mongodb.client.MongoCollection<org.bson.Document> domainCol() {
         return mongoClient
