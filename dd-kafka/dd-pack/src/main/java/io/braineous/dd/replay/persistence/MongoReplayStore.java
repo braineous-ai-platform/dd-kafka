@@ -14,8 +14,8 @@ import java.util.List;
 @ApplicationScoped
 public class MongoReplayStore implements ReplayStore{
 
-    static final String DB  = "dd";
-    static final String INGESTION_COL = MongoIngestionStore.COL;
+    public static final String DB  = "dd";
+    public static final String INGESTION_COL = MongoIngestionStore.COL;
 
     @Inject
     MongoClient mongoClient;
