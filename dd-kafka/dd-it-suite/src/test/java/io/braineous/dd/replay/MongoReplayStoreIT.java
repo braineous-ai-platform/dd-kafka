@@ -416,6 +416,174 @@ public class MongoReplayStoreIT {
         assertNotNull(e.timestamp());
     }
 
+    @Test
+    void findBySystemDlqId_returnsEvents_matchingDlqId_sortedByCreatedAt() {
+        var col = mongoClient.getDatabase(MongoReplayStore.DB).getCollection(MongoReplayStore.INGESTION_COL);
+
+        Instant t1 = Instant.parse("2026-01-07T16:00:01Z");
+        Instant t2 = Instant.parse("2026-01-07T16:00:02Z");
+        Instant t3 = Instant.parse("2026-01-07T16:00:03Z");
+
+        // only DLQ-A should match
+        col.insertOne(new Document()
+                .append("ingestionId", "ID-x")
+                .append("payload", "Px")
+                .append("createdAt", Date.from(t2))
+                .append("dlqId", "DLQ-B"));
+
+        col.insertOne(new Document()
+                .append("ingestionId", "ID-1")
+                .append("payload", "P1")
+                .append("createdAt", Date.from(t2))
+                .append("dlqId", "DLQ-A"));
+
+        col.insertOne(new Document()
+                .append("ingestionId", "ID-0")
+                .append("payload", "P0")
+                .append("createdAt", Date.from(t1))
+                .append("dlqId", "DLQ-A"));
+
+        col.insertOne(new Document()
+                .append("ingestionId", "ID-2")
+                .append("payload", "P2")
+                .append("createdAt", Date.from(t3))
+                .append("dlqId", "DLQ-A"));
+
+        ReplayRequest req = new ReplayRequest();
+        set(req, "dlqId", "DLQ-A");
+        set(req, "stream", "ingestion");
+        set(req, "reason", "it-test");
+
+        List<ReplayEvent> events = store.findBySystemDlqId(req);
+
+        assertNotNull(events);
+        assertEquals(3, events.size());
+
+        assertEquals("ID-0", events.get(0).id());
+        assertEquals("P0", events.get(0).payload());
+        assertEquals(t1, events.get(0).timestamp());
+
+        assertEquals(t2, events.get(1).timestamp());
+        assertEquals(t3, events.get(2).timestamp());
+    }
+
+    @Test
+    void findBySystemDlqId_nullOrBlankDlqId_returnsEmpty() {
+
+        assertNotNull(store.findBySystemDlqId(null));
+        assertTrue(store.findBySystemDlqId(null).isEmpty());
+
+        ReplayRequest r1 = new ReplayRequest();
+        set(r1, "dlqId", null);
+        set(r1, "stream", "ingestion");
+        set(r1, "reason", "it-test");
+        assertTrue(store.findBySystemDlqId(r1).isEmpty());
+
+        ReplayRequest r2 = new ReplayRequest();
+        set(r2, "dlqId", "   ");
+        set(r2, "stream", "ingestion");
+        set(r2, "reason", "it-test");
+        assertTrue(store.findBySystemDlqId(r2).isEmpty());
+    }
+
+    @Test
+    void findBySystemDlqId_trimsDlqId_andMatches() {
+        var col = mongoClient.getDatabase(MongoReplayStore.DB).getCollection(MongoReplayStore.INGESTION_COL);
+
+        Instant t1 = Instant.parse("2026-01-07T17:00:01Z");
+
+        col.insertOne(new Document()
+                .append("ingestionId", "ID-1")
+                .append("payload", "P1")
+                .append("createdAt", Date.from(t1))
+                .append("dlqId", "DLQ-A"));
+
+        ReplayRequest req = new ReplayRequest();
+        set(req, "dlqId", "   DLQ-A   ");
+        set(req, "stream", "ingestion");
+        set(req, "reason", "it-test");
+
+        List<ReplayEvent> events = store.findBySystemDlqId(req);
+
+        assertNotNull(events);
+        assertEquals(1, events.size());
+        assertEquals("ID-1", events.get(0).id());
+    }
+
+    @Test
+    void findBySystemDlqId_missingFields_doesNotCrash_andMapsNulls() {
+        var col = mongoClient.getDatabase(MongoReplayStore.DB).getCollection(MongoReplayStore.INGESTION_COL);
+
+        Instant t1 = Instant.parse("2026-01-07T18:00:01Z");
+
+        // missing ingestionId/payload; still matches dlqId
+        col.insertOne(new Document()
+                .append("createdAt", Date.from(t1))
+                .append("dlqId", "DLQ-A"));
+
+        ReplayRequest req = new ReplayRequest();
+        set(req, "dlqId", "DLQ-A");
+        set(req, "stream", "ingestion");
+        set(req, "reason", "it-test");
+
+        List<ReplayEvent> events = store.findBySystemDlqId(req);
+
+        assertNotNull(events);
+        assertEquals(1, events.size());
+
+        ReplayEvent e = events.get(0);
+        assertNull(e.id());
+        assertNull(e.payload());
+        assertNotNull(e.timestamp());
+    }
+
+    @Test
+    void parity_domainDlq_vs_systemDlq_same_results_same_order() {
+        var col = mongoClient.getDatabase(MongoReplayStore.DB).getCollection(MongoReplayStore.INGESTION_COL);
+
+        Instant t1 = Instant.parse("2026-01-07T19:00:01Z");
+        Instant t2 = Instant.parse("2026-01-07T19:00:02Z");
+        Instant t3 = Instant.parse("2026-01-07T19:00:03Z");
+
+        col.insertOne(new Document()
+                .append("ingestionId", "ID-0")
+                .append("payload", "P0")
+                .append("createdAt", Date.from(t1))
+                .append("dlqId", "DLQ-A"));
+
+        col.insertOne(new Document()
+                .append("ingestionId", "ID-1")
+                .append("payload", "P1")
+                .append("createdAt", Date.from(t2))
+                .append("dlqId", "DLQ-A"));
+
+        col.insertOne(new Document()
+                .append("ingestionId", "ID-2")
+                .append("payload", "P2")
+                .append("createdAt", Date.from(t3))
+                .append("dlqId", "DLQ-A"));
+
+        ReplayRequest req = new ReplayRequest();
+        set(req, "dlqId", "DLQ-A");
+        set(req, "stream", "ingestion");
+        set(req, "reason", "it-test");
+
+        List<ReplayEvent> a = store.findByDomainDlqId(req);
+        List<ReplayEvent> b = store.findBySystemDlqId(req);
+
+        assertNotNull(a);
+        assertNotNull(b);
+        assertEquals(a.size(), b.size());
+        assertEquals(3, a.size());
+
+        // strict equality on mapped fields in order
+        for (int i = 0; i < a.size(); i++) {
+            assertEquals(a.get(i).id(),        b.get(i).id());
+            assertEquals(a.get(i).payload(),   b.get(i).payload());
+            assertEquals(a.get(i).timestamp(), b.get(i).timestamp());
+        }
+    }
+
 
 
     //-----------------------------------------------------------------
