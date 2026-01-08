@@ -171,6 +171,256 @@ public class MongoReplayStoreIT {
         assertNotNull(e.timestamp());
     }
 
+    @Test
+    void findByTimeObjectKey_returnsEvents_matchingKey_sortedByCreatedAt() {
+        var col = mongoClient.getDatabase(MongoReplayStore.DB).getCollection(MongoReplayStore.INGESTION_COL);
+
+        Instant t1 = Instant.parse("2026-01-07T10:00:01Z");
+        Instant t2 = Instant.parse("2026-01-07T10:00:02Z");
+        Instant t3 = Instant.parse("2026-01-07T10:00:03Z");
+
+        col.insertOne(new Document()
+                .append("ingestionId", "ID-x")
+                .append("payload", "Px")
+                .append("createdAt", Date.from(t2))
+                .append("objectKey", "KEY-B"));
+
+        col.insertOne(new Document()
+                .append("ingestionId", "ID-1")
+                .append("payload", "P1")
+                .append("createdAt", Date.from(t2))
+                .append("objectKey", "KEY-A"));
+
+        col.insertOne(new Document()
+                .append("ingestionId", "ID-0")
+                .append("payload", "P0")
+                .append("createdAt", Date.from(t1))
+                .append("objectKey", "KEY-A"));
+
+        col.insertOne(new Document()
+                .append("ingestionId", "ID-2")
+                .append("payload", "P2")
+                .append("createdAt", Date.from(t3))
+                .append("objectKey", "KEY-A"));
+
+        ReplayRequest req = new ReplayRequest();
+        set(req, "objectKey", "KEY-A");
+        set(req, "stream", "ingestion");
+        set(req, "reason", "it-test");
+
+        List<ReplayEvent> events = store.findByTimeObjectKey(req);
+
+        assertNotNull(events);
+        assertEquals(3, events.size());
+
+        assertEquals("ID-0", events.get(0).id());
+        assertEquals("P0", events.get(0).payload());
+        assertEquals(t1, events.get(0).timestamp());
+
+        assertEquals(t2, events.get(1).timestamp());
+        assertEquals(t3, events.get(2).timestamp());
+    }
+
+    @Test
+    void findByTimeObjectKey_nullOrBlankKey_returnsEmpty() {
+
+        // null request => empty
+        assertNotNull(store.findByTimeObjectKey(null));
+        assertTrue(store.findByTimeObjectKey(null).isEmpty());
+
+        // null key => empty
+        ReplayRequest r1 = new ReplayRequest();
+        set(r1, "objectKey", null);
+        set(r1, "stream", "ingestion");
+        set(r1, "reason", "it-test");
+        assertTrue(store.findByTimeObjectKey(r1).isEmpty());
+
+        // blank key => empty
+        ReplayRequest r2 = new ReplayRequest();
+        set(r2, "objectKey", "   ");
+        set(r2, "stream", "ingestion");
+        set(r2, "reason", "it-test");
+        assertTrue(store.findByTimeObjectKey(r2).isEmpty());
+    }
+
+    @Test
+    void findByTimeObjectKey_trimsKey_andMatches() {
+        var col = mongoClient.getDatabase(MongoReplayStore.DB).getCollection(MongoReplayStore.INGESTION_COL);
+
+        Instant t1 = Instant.parse("2026-01-07T11:00:01Z");
+
+        col.insertOne(new Document()
+                .append("ingestionId", "ID-1")
+                .append("payload", "P1")
+                .append("createdAt", Date.from(t1))
+                .append("objectKey", "KEY-A"));
+
+        ReplayRequest req = new ReplayRequest();
+        set(req, "objectKey", "   KEY-A   ");
+        set(req, "stream", "ingestion");
+        set(req, "reason", "it-test");
+
+        List<ReplayEvent> events = store.findByTimeObjectKey(req);
+
+        assertNotNull(events);
+        assertEquals(1, events.size());
+        assertEquals("ID-1", events.get(0).id());
+    }
+
+
+    @Test
+    void findByTimeObjectKey_missingFields_doesNotCrash_andMapsNulls() {
+        var col = mongoClient.getDatabase(MongoReplayStore.DB).getCollection(MongoReplayStore.INGESTION_COL);
+
+        Instant t1 = Instant.parse("2026-01-07T12:00:01Z");
+
+        // missing ingestionId/payload; still matches objectKey
+        col.insertOne(new Document()
+                .append("createdAt", Date.from(t1))
+                .append("objectKey", "KEY-A"));
+
+        ReplayRequest req = new ReplayRequest();
+        set(req, "objectKey", "KEY-A");
+        set(req, "stream", "ingestion");
+        set(req, "reason", "it-test");
+
+        List<ReplayEvent> events = store.findByTimeObjectKey(req);
+
+        assertNotNull(events);
+        assertEquals(1, events.size());
+
+        ReplayEvent e = events.get(0);
+        assertNull(e.id());
+        assertNull(e.payload());
+        assertNotNull(e.timestamp());
+    }
+
+    @Test
+    void findByDomainDlqId_returnsEvents_matchingDlqId_sortedByCreatedAt() {
+        var col = mongoClient.getDatabase(MongoReplayStore.DB).getCollection(MongoReplayStore.INGESTION_COL);
+
+        Instant t1 = Instant.parse("2026-01-07T13:00:01Z");
+        Instant t2 = Instant.parse("2026-01-07T13:00:02Z");
+        Instant t3 = Instant.parse("2026-01-07T13:00:03Z");
+
+        // only DLQ-A should match
+        col.insertOne(new Document()
+                .append("ingestionId", "ID-x")
+                .append("payload", "Px")
+                .append("createdAt", Date.from(t2))
+                .append("dlqId", "DLQ-B"));
+
+        col.insertOne(new Document()
+                .append("ingestionId", "ID-1")
+                .append("payload", "P1")
+                .append("createdAt", Date.from(t2))
+                .append("dlqId", "DLQ-A"));
+
+        col.insertOne(new Document()
+                .append("ingestionId", "ID-0")
+                .append("payload", "P0")
+                .append("createdAt", Date.from(t1))
+                .append("dlqId", "DLQ-A"));
+
+        col.insertOne(new Document()
+                .append("ingestionId", "ID-2")
+                .append("payload", "P2")
+                .append("createdAt", Date.from(t3))
+                .append("dlqId", "DLQ-A"));
+
+        ReplayRequest req = new ReplayRequest();
+        set(req, "dlqId", "DLQ-A");
+        set(req, "stream", "ingestion");
+        set(req, "reason", "it-test");
+
+        List<ReplayEvent> events = store.findByDomainDlqId(req);
+
+        assertNotNull(events);
+        assertEquals(3, events.size());
+
+        assertEquals("ID-0", events.get(0).id());
+        assertEquals("P0", events.get(0).payload());
+        assertEquals(t1, events.get(0).timestamp());
+
+        assertEquals(t2, events.get(1).timestamp());
+        assertEquals(t3, events.get(2).timestamp());
+    }
+
+    @Test
+    void findByDomainDlqId_nullOrBlankDlqId_returnsEmpty() {
+
+        assertNotNull(store.findByDomainDlqId(null));
+        assertTrue(store.findByDomainDlqId(null).isEmpty());
+
+        ReplayRequest r1 = new ReplayRequest();
+        set(r1, "dlqId", null);
+        set(r1, "stream", "ingestion");
+        set(r1, "reason", "it-test");
+        assertTrue(store.findByDomainDlqId(r1).isEmpty());
+
+        ReplayRequest r2 = new ReplayRequest();
+        set(r2, "dlqId", "   ");
+        set(r2, "stream", "ingestion");
+        set(r2, "reason", "it-test");
+        assertTrue(store.findByDomainDlqId(r2).isEmpty());
+    }
+
+    @Test
+    void findByDomainDlqId_trimsDlqId_andMatches() {
+        var col = mongoClient.getDatabase(MongoReplayStore.DB).getCollection(MongoReplayStore.INGESTION_COL);
+
+        Instant t1 = Instant.parse("2026-01-07T14:00:01Z");
+
+        col.insertOne(new Document()
+                .append("ingestionId", "ID-1")
+                .append("payload", "P1")
+                .append("createdAt", Date.from(t1))
+                .append("dlqId", "DLQ-A"));
+
+        ReplayRequest req = new ReplayRequest();
+        set(req, "dlqId", "   DLQ-A   ");
+        set(req, "stream", "ingestion");
+        set(req, "reason", "it-test");
+
+        List<ReplayEvent> events = store.findByDomainDlqId(req);
+
+        assertNotNull(events);
+        assertEquals(1, events.size());
+        assertEquals("ID-1", events.get(0).id());
+    }
+
+    @Test
+    void findByDomainDlqId_missingFields_doesNotCrash_andMapsNulls() {
+        var col = mongoClient.getDatabase(MongoReplayStore.DB).getCollection(MongoReplayStore.INGESTION_COL);
+
+        Instant t1 = Instant.parse("2026-01-07T15:00:01Z");
+
+        // missing ingestionId/payload; still matches dlqId
+        col.insertOne(new Document()
+                .append("createdAt", Date.from(t1))
+                .append("dlqId", "DLQ-A"));
+
+        ReplayRequest req = new ReplayRequest();
+        set(req, "dlqId", "DLQ-A");
+        set(req, "stream", "ingestion");
+        set(req, "reason", "it-test");
+
+        List<ReplayEvent> events = store.findByDomainDlqId(req);
+
+        assertNotNull(events);
+        assertEquals(1, events.size());
+
+        ReplayEvent e = events.get(0);
+        assertNull(e.id());
+        assertNull(e.payload());
+        assertNotNull(e.timestamp());
+    }
+
+
+
+    //-----------------------------------------------------------------
+
+
     // ---------------- helpers ----------------
 
     private static Document doc(String ingestionId, String payload, Instant createdAt) {

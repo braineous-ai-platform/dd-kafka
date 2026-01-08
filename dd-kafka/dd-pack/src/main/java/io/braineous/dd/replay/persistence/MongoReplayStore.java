@@ -67,13 +67,60 @@ public class MongoReplayStore implements ReplayStore{
 
     @Override
     public List<ReplayEvent> findByTimeObjectKey(ReplayRequest request) {
-        return null;
+
+        if (request == null) return List.of();
+
+        final String key;
+        try {
+            key = request.objectKey();
+        } catch (Exception e) {
+            return List.of();
+        }
+
+        if (key == null || key.trim().isEmpty()) return List.of();
+
+        try {
+            var filter = com.mongodb.client.model.Filters.eq("objectKey", key.trim());
+            var sort   = com.mongodb.client.model.Sorts.ascending("createdAt", "_id");
+
+            java.util.ArrayList<ReplayEvent> out = new java.util.ArrayList<>();
+            for (org.bson.Document d : collection().find(filter).sort(sort)) {
+                out.add(mapDocToReplayEvent(d));
+            }
+            return java.util.List.copyOf(out);
+        } catch (Exception e) {
+            return List.of();
+        }
     }
 
     @Override
     public List<ReplayEvent> findByDomainDlqId(ReplayRequest request) {
-        return null;
+
+        if (request == null) return List.of();
+
+        final String dlqId;
+        try {
+            dlqId = request.dlqId();
+        } catch (Exception e) {
+            return List.of();
+        }
+
+        if (dlqId == null || dlqId.trim().isEmpty()) return List.of();
+
+        try {
+            var filter = com.mongodb.client.model.Filters.eq("dlqId", dlqId.trim());
+            var sort   = com.mongodb.client.model.Sorts.ascending("createdAt", "_id");
+
+            java.util.ArrayList<ReplayEvent> out = new java.util.ArrayList<>();
+            for (org.bson.Document d : collection().find(filter).sort(sort)) {
+                out.add(mapDocToReplayEvent(d));
+            }
+            return java.util.List.copyOf(out);
+        } catch (Exception e) {
+            return List.of();
+        }
     }
+
 
     @Override
     public List<ReplayEvent> findBySystemDlqId(ReplayRequest request) {
