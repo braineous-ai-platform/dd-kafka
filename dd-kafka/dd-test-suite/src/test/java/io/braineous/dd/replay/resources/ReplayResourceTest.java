@@ -12,15 +12,57 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
+import org.junit.jupiter.api.Test;
+
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.*;
+
 public class ReplayResourceTest {
+
+    // ---------------- helpers ----------------
+
+    private static void validCommon(ReplayRequest req) {
+        when(req.stream()).thenReturn("ingestion");
+        when(req.reason()).thenReturn("it-test");
+    }
+
+    private static void validTimeWindow(ReplayRequest req) {
+        validCommon(req);
+        when(req.fromTime()).thenReturn("2026-01-07T00:00:00Z");
+        when(req.toTime()).thenReturn("2026-01-07T01:00:00Z");
+    }
+
+    private static void validObjectKey(ReplayRequest req) {
+        validCommon(req);
+        when(req.objectKey()).thenReturn("OBJ-A");
+    }
+
+    private static void validDlqId(ReplayRequest req) {
+        validCommon(req);
+        when(req.dlqId()).thenReturn("DLQ-A");
+    }
+
+    private static ConfigGate enabledGate() {
+        ConfigService cfgSvc = new DDConfigService().configService();
+        cfgSvc.setProperty("dd.feature.replay.enabled", "true");
+        return ConfigGates.from(cfgSvc);
+    }
+
+    private static ConfigGate disabledGate() {
+        ConfigService cfgSvc = new DDConfigService().configService();
+        cfgSvc.setProperty("dd.feature.replay.enabled", "false");
+        return ConfigGates.from(cfgSvc);
+    }
+
+    // ---------------- tests ----------------
 
     @Test
     public void replayByTimeWindow_delegates_to_service() {
         ReplayRequest req = mock(ReplayRequest.class);
+        validTimeWindow(req);
+
         ReplayResult expected = ReplayResult.badRequest("TW");
-        ConfigService cfgSvc = new DDConfigService().configService();
-        ConfigGate cfgGate = ConfigGates.from(cfgSvc);
-        cfgSvc.setProperty("dd.feature.replay.enabled", "true");
+        ConfigGate cfgGate = enabledGate();
 
         ReplayService svc = mock(ReplayService.class);
         when(svc.replayByTimeWindow(req)).thenReturn(expected);
@@ -39,10 +81,10 @@ public class ReplayResourceTest {
     @Test
     public void replayByTimeObjectKey_delegates_to_service() {
         ReplayRequest req = mock(ReplayRequest.class);
+        validObjectKey(req);
+
         ReplayResult expected = ReplayResult.badRequest("TOK");
-        ConfigService cfgSvc = new DDConfigService().configService();
-        ConfigGate cfgGate = ConfigGates.from(cfgSvc);
-        cfgSvc.setProperty("dd.feature.replay.enabled", "true");
+        ConfigGate cfgGate = enabledGate();
 
         ReplayService svc = mock(ReplayService.class);
         when(svc.replayByTimeObjectKey(req)).thenReturn(expected);
@@ -61,10 +103,10 @@ public class ReplayResourceTest {
     @Test
     public void replayByDomainDlqId_delegates_to_service() {
         ReplayRequest req = mock(ReplayRequest.class);
+        validDlqId(req);
+
         ReplayResult expected = ReplayResult.badRequest("DD");
-        ConfigService cfgSvc = new DDConfigService().configService();
-        ConfigGate cfgGate = ConfigGates.from(cfgSvc);
-        cfgSvc.setProperty("dd.feature.replay.enabled", "true");
+        ConfigGate cfgGate = enabledGate();
 
         ReplayService svc = mock(ReplayService.class);
         when(svc.replayByDomainDlqId(req)).thenReturn(expected);
@@ -83,10 +125,10 @@ public class ReplayResourceTest {
     @Test
     public void replayBySystemDlqId_delegates_to_service() {
         ReplayRequest req = mock(ReplayRequest.class);
+        validDlqId(req);
+
         ReplayResult expected = ReplayResult.badRequest("SD");
-        ConfigService cfgSvc = new DDConfigService().configService();
-        ConfigGate cfgGate = ConfigGates.from(cfgSvc);
-        cfgSvc.setProperty("dd.feature.replay.enabled", "true");
+        ConfigGate cfgGate = enabledGate();
 
         ReplayService svc = mock(ReplayService.class);
         when(svc.replayBySystemDlqId(req)).thenReturn(expected);
@@ -102,37 +144,29 @@ public class ReplayResourceTest {
         verifyNoMoreInteractions(svc);
     }
 
-
-
     @Test
     public void replayByTimeWindow_returns_fail_when_disabled() {
         ReplayRequest req = mock(ReplayRequest.class);
-
-        ConfigService cfgSvc = new DDConfigService().configService();
-        cfgSvc.setProperty("dd.feature.replay.enabled", "false"); // use the real key
-        ConfigGate cfgGate = ConfigGates.from(cfgSvc);
 
         ReplayService svc = mock(ReplayService.class);
 
         ReplayResource r = new ReplayResource();
         r.setService(svc);
-        r.setGate(cfgGate);
+        r.setGate(disabledGate());
 
         ReplayResult actual = r.replayByTimeWindow(req);
 
         assertFalse(actual.ok());
         assertEquals("DD-CONFIG-replay_disabled", actual.reason());
-
-        verifyNoInteractions(svc); // 🔥 this is the whole point
+        verifyNoInteractions(svc);
     }
 
     @Test
     public void replayByTimeWindow_delegates_to_service_when_enabled() {
         ReplayRequest req = mock(ReplayRequest.class);
+        validTimeWindow(req);
 
-        ConfigService cfgSvc = new DDConfigService().configService();
-        cfgSvc.setProperty("dd.feature.replay.enabled", "true");
-        ConfigGate cfgGate = ConfigGates.from(cfgSvc);
+        ConfigGate cfgGate = enabledGate();
 
         ReplayResult expected = ReplayResult.empty(req);
 
@@ -149,8 +183,7 @@ public class ReplayResourceTest {
         verify(svc).replayByTimeWindow(req);
         verifyNoMoreInteractions(svc);
     }
-
-
 }
+
 
 

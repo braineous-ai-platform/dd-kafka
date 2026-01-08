@@ -37,6 +37,9 @@ public class ReplayResource {
         if(!gate.on("dd.feature.replay.enabled"))
             return ReplayResult.fail("DD-CONFIG-replay_disabled");
 
+        ReplayResult bad = validateTimeWindow(request);
+        if (bad != null) return bad;
+
         return service.replayByTimeWindow(request);
     }
 
@@ -45,6 +48,9 @@ public class ReplayResource {
     public ReplayResult replayByTimeObjectKey(ReplayRequest request){
         if(!gate.on("dd.feature.replay.enabled"))
             return ReplayResult.fail("DD-CONFIG-replay_disabled");
+
+        ReplayResult bad = validateObjectKey(request);
+        if (bad != null) return bad;
 
         return service.replayByTimeObjectKey(request);
     }
@@ -55,6 +61,9 @@ public class ReplayResource {
         if(!gate.on("dd.feature.replay.enabled"))
             return ReplayResult.fail("DD-CONFIG-replay_disabled");
 
+        ReplayResult bad = validateDlqId(request);
+        if (bad != null) return bad;
+
         return service.replayByDomainDlqId(request);
     }
 
@@ -64,7 +73,72 @@ public class ReplayResource {
         if(!gate.on("dd.feature.replay.enabled"))
             return ReplayResult.fail("DD-CONFIG-replay_disabled");
 
+        ReplayResult bad = validateDlqId(request);
+        if (bad != null) return bad;
+
         return service.replayBySystemDlqId(request);
+    }
+
+    //-------Validators --------------------------
+    private ReplayResult validateCommon(ReplayRequest req) {
+        if (req == null) return ReplayResult.badRequest("DD-REPLAY-bad_request-null");
+
+        String stream = req.stream();
+        String reason = req.reason();
+
+        if (stream == null || stream.trim().isEmpty())
+            return ReplayResult.badRequest("DD-REPLAY-bad_request-stream_missing");
+
+        if (reason == null || reason.trim().isEmpty())
+            return ReplayResult.badRequest("DD-REPLAY-bad_request-reason_missing");
+
+        return null; // ok
+    }
+
+    private ReplayResult validateTimeWindow(ReplayRequest req) {
+        ReplayResult common = validateCommon(req);
+        if (common != null) return common;
+
+        String from = req.fromTime();
+        String to   = req.toTime();
+
+        if (from == null || from.trim().isEmpty())
+            return ReplayResult.badRequest("DD-REPLAY-bad_request-fromTime_missing");
+        if (to == null || to.trim().isEmpty())
+            return ReplayResult.badRequest("DD-REPLAY-bad_request-toTime_missing");
+
+        // optional: parse check at API surface (keeps store boring)
+        try {
+            java.time.Instant f = java.time.Instant.parse(from);
+            java.time.Instant t = java.time.Instant.parse(to);
+            if (!f.isBefore(t)) return ReplayResult.badRequest("DD-REPLAY-bad_request-window_invalid");
+        } catch (Exception e) {
+            return ReplayResult.badRequest("DD-REPLAY-bad_request-window_parse");
+        }
+
+        return null;
+    }
+
+    private ReplayResult validateObjectKey(ReplayRequest req) {
+        ReplayResult common = validateCommon(req);
+        if (common != null) return common;
+
+        String key = req.objectKey();
+        if (key == null || key.trim().isEmpty())
+            return ReplayResult.badRequest("DD-REPLAY-bad_request-objectKey_missing");
+
+        return null;
+    }
+
+    private ReplayResult validateDlqId(ReplayRequest req) {
+        ReplayResult common = validateCommon(req);
+        if (common != null) return common;
+
+        String id = req.dlqId();
+        if (id == null || id.trim().isEmpty())
+            return ReplayResult.badRequest("DD-REPLAY-bad_request-dlqId_missing");
+
+        return null;
     }
 }
 
