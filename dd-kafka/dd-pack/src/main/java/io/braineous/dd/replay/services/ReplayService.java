@@ -71,11 +71,9 @@ public class ReplayService {
             return a.id().compareTo(b.id());
         });
 
-        int limit = request.limitOrDefault(500);
         int replayed = 0;
 
         for (ReplayEvent e : events) {
-            if (replayed >= limit) break;
 
             try {
                 JsonObject payloadJson = JsonParser.parseString(e.payload()).getAsJsonObject();

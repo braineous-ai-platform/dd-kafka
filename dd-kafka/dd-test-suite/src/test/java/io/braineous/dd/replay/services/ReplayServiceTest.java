@@ -12,15 +12,15 @@ import static org.junit.jupiter.api.Assertions.*;
 
 public class ReplayServiceTest {
 
-    @Test
-    void replayEvents_sortsByTimestamp_thenId_and_enforcesLimit() {
+    @org.junit.jupiter.api.Test
+    void replayEvents_sortsByTimestamp_thenId() {
         // arrange
         ReplayService svc = new ReplayService() {
             int calls = 0;
             final java.util.List<String> seenIds = new java.util.ArrayList<>();
 
             @Override
-            void orchestrate(JsonObject payloadJson) {
+            void orchestrate(com.google.gson.JsonObject payloadJson) {
                 calls++;
                 seenIds.add(payloadJson.get("id").getAsString());
                 Console.log("replay_orchestrate", payloadJson);
@@ -33,61 +33,57 @@ public class ReplayServiceTest {
         events.add(new ReplayEvent("a", "{\"id\":\"a\"}", java.time.Instant.parse("2026-01-05T10:00:01Z")));
         events.add(new ReplayEvent("c", "{\"id\":\"c\"}", java.time.Instant.parse("2026-01-05T10:00:02Z")));
 
-        ReplayRequest req = new ReplayRequest();
-        // only limit matters for this test
-        // set req.limit = 2 (however you set it in your model)
-        // if you have setter: req.setLimit(2);
-        // if fields are package-private, set directly.
-        setLimit(req, 2);
+        ReplayRequest req = new ReplayRequest(); // limit removed
 
         // act
         ReplayResult result = svc.replayEvents(events, req);
 
         // assert
-        assertTrue(result.ok());
-        assertEquals(2, result.replayedCount());      // limit enforced
-        assertEquals(3, result.matchedCount());       // matched is full list size
+        org.junit.jupiter.api.Assertions.assertTrue(result.ok());
+        org.junit.jupiter.api.Assertions.assertEquals(3, result.replayedCount());      // all valid replayed
+        org.junit.jupiter.api.Assertions.assertEquals(3, result.matchedCount());       // matched is full list size
         // deterministic order: timestamp asc => "a" first, then tie-break on id between "b" and "c" => "b"
-        assertEquals(java.util.List.of("a", "b"), ((java.util.List<String>) getSeenIds(svc)));
+        org.junit.jupiter.api.Assertions.assertEquals(java.util.List.of("a", "b", "c"),
+                ((java.util.List<String>) getSeenIds(svc)));
     }
 
-    @Test
+    @org.junit.jupiter.api.Test
     void replayEvents_nullOrEmpty_returnsEmpty_andDoesNotOrchestrate() {
         ReplayService svc = new ReplayService() {
             int calls = 0;
 
             @Override
-            void orchestrate(JsonObject payloadJson) {
+            void orchestrate(com.google.gson.JsonObject payloadJson) {
                 calls++;
                 Console.log("replay_orchestrate", payloadJson);
             }
         };
 
         ReplayRequest req = new ReplayRequest();
-        setLimit(req, 500);
+        setLimit(req, 500); // no-op now
 
         // null list
         ReplayResult r1 = svc.replayEvents(null, req);
-        assertTrue(r1.ok());
-        assertEquals(0, r1.replayedCount());
-        assertEquals(0, r1.matchedCount());
-        assertEquals(0, getCalls(svc));
+        org.junit.jupiter.api.Assertions.assertTrue(r1.ok());
+        org.junit.jupiter.api.Assertions.assertEquals(0, r1.replayedCount());
+        org.junit.jupiter.api.Assertions.assertEquals(0, r1.matchedCount());
+        org.junit.jupiter.api.Assertions.assertEquals(0, getCalls(svc));
 
         // empty list
         ReplayResult r2 = svc.replayEvents(new java.util.ArrayList<>(), req);
-        assertTrue(r2.ok());
-        assertEquals(0, r2.replayedCount());
-        assertEquals(0, r2.matchedCount());
-        assertEquals(0, getCalls(svc));
+        org.junit.jupiter.api.Assertions.assertTrue(r2.ok());
+        org.junit.jupiter.api.Assertions.assertEquals(0, r2.replayedCount());
+        org.junit.jupiter.api.Assertions.assertEquals(0, r2.matchedCount());
+        org.junit.jupiter.api.Assertions.assertEquals(0, getCalls(svc));
     }
 
-    @Test
+    @org.junit.jupiter.api.Test
     void replayEvents_badPayload_isSkipped_andReplayContinues() {
         ReplayService svc = new ReplayService() {
             int calls = 0;
 
             @Override
-            void orchestrate(JsonObject payloadJson) {
+            void orchestrate(com.google.gson.JsonObject payloadJson) {
                 calls++;
                 Console.log("replay_orchestrate", payloadJson);
             }
@@ -95,38 +91,38 @@ public class ReplayServiceTest {
 
         java.util.List<ReplayEvent> events = new java.util.ArrayList<>();
         events.add(new ReplayEvent("a", "{\"id\":\"a\"}", java.time.Instant.parse("2026-01-05T10:00:01Z")));
-        events.add(new ReplayEvent("b", "NOT_JSON",      java.time.Instant.parse("2026-01-05T10:00:02Z"))); // bad
+        events.add(new ReplayEvent("b", "NOT_JSON", java.time.Instant.parse("2026-01-05T10:00:02Z"))); // bad
         events.add(new ReplayEvent("c", "{\"id\":\"c\"}", java.time.Instant.parse("2026-01-05T10:00:03Z")));
 
         ReplayRequest req = new ReplayRequest();
-        setLimit(req, 500);
+        setLimit(req, 500); // no-op now
 
         ReplayResult result = svc.replayEvents(events, req);
 
-        assertTrue(result.ok());
-        assertEquals(2, result.replayedCount(), "Should replay only valid payloads");
-        assertEquals(3, result.matchedCount(),  "Matched is still total selected by store");
-        assertEquals(2, getCalls(svc));
+        org.junit.jupiter.api.Assertions.assertTrue(result.ok());
+        org.junit.jupiter.api.Assertions.assertEquals(2, result.replayedCount(), "Should replay only valid payloads");
+        org.junit.jupiter.api.Assertions.assertEquals(3, result.matchedCount(), "Matched is still total selected by store");
+        org.junit.jupiter.api.Assertions.assertEquals(2, getCalls(svc));
     }
 
-    @Test
+    @org.junit.jupiter.api.Test
     void replayByTimeWindow_storeNull_returnsBadRequest() {
         ReplayService svc = new ReplayService(); // store not injected
         ReplayRequest req = new ReplayRequest();
 
         ReplayResult result = svc.replayByTimeWindow(req);
 
-        assertFalse(result.ok());
-        assertEquals("store_null", result.reason());
+        org.junit.jupiter.api.Assertions.assertFalse(result.ok());
+        org.junit.jupiter.api.Assertions.assertEquals("store_null", result.reason());
     }
 
-    @Test
+    @org.junit.jupiter.api.Test
     void replayByTimeWindow_usesStore_andReplaysAllSelected() {
         ReplayService svc = new ReplayService() {
             int calls = 0;
 
             @Override
-            void orchestrate(JsonObject payloadJson) {
+            void orchestrate(com.google.gson.JsonObject payloadJson) {
                 calls++;
                 Console.log("replay_orchestrate", payloadJson);
             }
@@ -160,23 +156,23 @@ public class ReplayServiceTest {
         svc.setStore(mem);
 
         ReplayRequest req = new ReplayRequest();
-        setLimit(req, 500);
+        setLimit(req, 500); // no-op now
 
         ReplayResult result = svc.replayByTimeWindow(req);
 
-        assertTrue(result.ok());
-        assertEquals(2, result.matchedCount());
-        assertEquals(2, result.replayedCount());
-        assertEquals(2, getCalls(svc));
+        org.junit.jupiter.api.Assertions.assertTrue(result.ok());
+        org.junit.jupiter.api.Assertions.assertEquals(2, result.matchedCount());
+        org.junit.jupiter.api.Assertions.assertEquals(2, result.replayedCount());
+        org.junit.jupiter.api.Assertions.assertEquals(2, getCalls(svc));
     }
 
-    @Test
-    void replayByTimeWindow_enforcesLimit_replayedLessThanMatched() {
+    @org.junit.jupiter.api.Test
+    void replayByTimeWindow_replaysAllSelected_whenAllValid() {
         ReplayService svc = new ReplayService() {
             int calls = 0;
 
             @Override
-            void orchestrate(JsonObject payloadJson) {
+            void orchestrate(com.google.gson.JsonObject payloadJson) {
                 calls++;
                 Console.log("replay_orchestrate", payloadJson);
             }
@@ -200,23 +196,23 @@ public class ReplayServiceTest {
         svc.setStore(mem);
 
         ReplayRequest req = new ReplayRequest();
-        setLimit(req, 2);
+        setLimit(req, 2); // no-op now
 
         ReplayResult result = svc.replayByTimeWindow(req);
 
-        assertTrue(result.ok());
-        assertEquals(3, result.matchedCount());
-        assertEquals(2, result.replayedCount());
-        assertEquals(2, getCalls(svc));
+        org.junit.jupiter.api.Assertions.assertTrue(result.ok());
+        org.junit.jupiter.api.Assertions.assertEquals(3, result.matchedCount());
+        org.junit.jupiter.api.Assertions.assertEquals(3, result.replayedCount());
+        org.junit.jupiter.api.Assertions.assertEquals(3, getCalls(svc));
     }
 
-    @Test
+    @org.junit.jupiter.api.Test
     void replayByTimeWindow_skipsBadPayload_andContinues() {
         ReplayService svc = new ReplayService() {
             int calls = 0;
 
             @Override
-            void orchestrate(JsonObject payloadJson) {
+            void orchestrate(com.google.gson.JsonObject payloadJson) {
                 calls++;
                 Console.log("replay_orchestrate", payloadJson);
             }
@@ -227,7 +223,7 @@ public class ReplayServiceTest {
             public java.util.List<ReplayEvent> findByTimeWindow(ReplayRequest request) {
                 java.util.List<ReplayEvent> events = new java.util.ArrayList<>();
                 events.add(new ReplayEvent("a", "{\"id\":\"a\"}", java.time.Instant.parse("2026-01-05T10:00:01Z")));
-                events.add(new ReplayEvent("b", "NOT_JSON",      java.time.Instant.parse("2026-01-05T10:00:02Z"))); // bad
+                events.add(new ReplayEvent("b", "NOT_JSON", java.time.Instant.parse("2026-01-05T10:00:02Z"))); // bad
                 events.add(new ReplayEvent("c", "{\"id\":\"c\"}", java.time.Instant.parse("2026-01-05T10:00:03Z")));
                 return events;
             }
@@ -240,17 +236,17 @@ public class ReplayServiceTest {
         svc.setStore(mem);
 
         ReplayRequest req = new ReplayRequest();
-        setLimit(req, 500);
+        setLimit(req, 500); // no-op now
 
         ReplayResult result = svc.replayByTimeWindow(req);
 
-        assertTrue(result.ok());
-        assertEquals(3, result.matchedCount());
-        assertEquals(2, result.replayedCount());
-        assertEquals(2, getCalls(svc));
+        org.junit.jupiter.api.Assertions.assertTrue(result.ok());
+        org.junit.jupiter.api.Assertions.assertEquals(3, result.matchedCount());
+        org.junit.jupiter.api.Assertions.assertEquals(2, result.replayedCount());
+        org.junit.jupiter.api.Assertions.assertEquals(2, getCalls(svc));
     }
 
-    @Test
+    @org.junit.jupiter.api.Test
     public void parity_domainDlq_vs_systemDlq_same_events_same_result_and_same_orchestration() {
 
         // arrange: same events returned for both entrypoints
@@ -269,7 +265,6 @@ public class ReplayServiceTest {
         ReplayService svcB = serviceSpy(store, callsB);
 
         ReplayRequest req = org.mockito.Mockito.mock(ReplayRequest.class);
-        org.mockito.Mockito.when(req.limitOrDefault(500)).thenReturn(500);
 
         // act
         ReplayResult a = svcA.replayByDomainDlqId(req);
@@ -287,10 +282,12 @@ public class ReplayServiceTest {
         org.junit.jupiter.api.Assertions.assertEquals(callsA, callsB);
 
         // expected order: E-1, E-2, E-3 (sorted by timestamp then id)
-        org.junit.jupiter.api.Assertions.assertEquals("1", callsA.get(0).get("a").getAsString()); // if number, adjust below
+        org.junit.jupiter.api.Assertions.assertEquals(1, callsA.get(0).get("a").getAsInt());
+        org.junit.jupiter.api.Assertions.assertEquals(2, callsA.get(1).get("a").getAsInt());
+        org.junit.jupiter.api.Assertions.assertEquals(3, callsA.get(2).get("a").getAsInt());
     }
 
-    @Test
+    @org.junit.jupiter.api.Test
     public void parity_domainDlq_vs_systemDlq_bad_payloads_skipped_consistently() {
 
         // arrange: include one bad JSON payload that will be skipped
@@ -309,7 +306,6 @@ public class ReplayServiceTest {
         ReplayService svcB = serviceSpy(store, callsB);
 
         ReplayRequest req = org.mockito.Mockito.mock(ReplayRequest.class);
-        org.mockito.Mockito.when(req.limitOrDefault(500)).thenReturn(500);
 
         // act
         ReplayResult a = svcA.replayByDomainDlqId(req);
@@ -331,8 +327,8 @@ public class ReplayServiceTest {
         org.junit.jupiter.api.Assertions.assertEquals(callsA, callsB);
     }
 
-    @Test
-    public void parity_domainDlq_vs_systemDlq_respects_limit_identically() {
+    @org.junit.jupiter.api.Test
+    public void parity_domainDlq_vs_systemDlq_replays_all_identically() {
 
         // arrange: 5 valid events
         java.util.List<ReplayEvent> events = java.util.List.of(
@@ -352,7 +348,6 @@ public class ReplayServiceTest {
         ReplayService svcB = serviceSpy(store, callsB);
 
         ReplayRequest req = org.mockito.Mockito.mock(ReplayRequest.class);
-        org.mockito.Mockito.when(req.limitOrDefault(500)).thenReturn(2);
 
         // act
         ReplayResult a = svcA.replayByDomainDlqId(req);
@@ -361,16 +356,16 @@ public class ReplayServiceTest {
         // assert
         org.junit.jupiter.api.Assertions.assertTrue(a.ok());
         org.junit.jupiter.api.Assertions.assertTrue(b.ok());
-        org.junit.jupiter.api.Assertions.assertEquals(2, a.replayedCount());
-        org.junit.jupiter.api.Assertions.assertEquals(2, b.replayedCount());
+        org.junit.jupiter.api.Assertions.assertEquals(5, a.replayedCount());
+        org.junit.jupiter.api.Assertions.assertEquals(5, b.replayedCount());
         org.junit.jupiter.api.Assertions.assertEquals(5, a.matchedCount());
         org.junit.jupiter.api.Assertions.assertEquals(5, b.matchedCount());
 
-        // exact same 2 calls
+        // exact same calls, same order
         org.junit.jupiter.api.Assertions.assertEquals(callsA, callsB);
     }
 
-    @Test
+    @org.junit.jupiter.api.Test
     public void parity_timeWindow_vs_timeObjectKey_same_events_same_result_and_same_orchestration() {
 
         // arrange
@@ -389,7 +384,6 @@ public class ReplayServiceTest {
         ReplayService svcB = serviceSpy(store, callsB);
 
         ReplayRequest req = org.mockito.Mockito.mock(ReplayRequest.class);
-        org.mockito.Mockito.when(req.limitOrDefault(500)).thenReturn(500);
 
         // act
         ReplayResult a = svcA.replayByTimeWindow(req);
@@ -406,7 +400,7 @@ public class ReplayServiceTest {
         org.junit.jupiter.api.Assertions.assertEquals(b.replayedCount(), callsB.size());
     }
 
-    @Test
+    @org.junit.jupiter.api.Test
     public void parity_timeWindow_vs_timeObjectKey_bad_payloads_skipped_consistently() {
 
         // arrange
@@ -425,7 +419,6 @@ public class ReplayServiceTest {
         ReplayService svcB = serviceSpy(store, callsB);
 
         ReplayRequest req = org.mockito.Mockito.mock(ReplayRequest.class);
-        org.mockito.Mockito.when(req.limitOrDefault(500)).thenReturn(500);
 
         // act
         ReplayResult a = svcA.replayByTimeWindow(req);
@@ -443,8 +436,8 @@ public class ReplayServiceTest {
         org.junit.jupiter.api.Assertions.assertEquals(callsA, callsB);
     }
 
-    @Test
-    public void parity_timeWindow_vs_timeObjectKey_respects_limit_identically() {
+    @org.junit.jupiter.api.Test
+    public void parity_timeWindow_vs_timeObjectKey_replays_all_identically() {
 
         // arrange
         java.util.List<ReplayEvent> events = java.util.List.of(
@@ -463,7 +456,6 @@ public class ReplayServiceTest {
         ReplayService svcB = serviceSpy(store, callsB);
 
         ReplayRequest req = org.mockito.Mockito.mock(ReplayRequest.class);
-        org.mockito.Mockito.when(req.limitOrDefault(500)).thenReturn(2);
 
         // act
         ReplayResult a = svcA.replayByTimeWindow(req);
@@ -474,13 +466,11 @@ public class ReplayServiceTest {
         org.junit.jupiter.api.Assertions.assertTrue(b.ok());
         org.junit.jupiter.api.Assertions.assertEquals(4, a.matchedCount());
         org.junit.jupiter.api.Assertions.assertEquals(4, b.matchedCount());
-        org.junit.jupiter.api.Assertions.assertEquals(2, a.replayedCount());
-        org.junit.jupiter.api.Assertions.assertEquals(2, b.replayedCount());
+        org.junit.jupiter.api.Assertions.assertEquals(4, a.replayedCount());
+        org.junit.jupiter.api.Assertions.assertEquals(4, b.replayedCount());
 
         org.junit.jupiter.api.Assertions.assertEquals(callsA, callsB);
     }
-
-
 
     //--------------------------------------------------------------
     private static Object getSeenIds(ReplayService svc) {
@@ -493,7 +483,6 @@ public class ReplayServiceTest {
         }
     }
 
-
     private static int getCalls(ReplayService svc) {
         try {
             java.lang.reflect.Field f = svc.getClass().getDeclaredField("calls");
@@ -505,16 +494,9 @@ public class ReplayServiceTest {
     }
 
     private static void setLimit(ReplayRequest req, int limit) {
-        try {
-            java.lang.reflect.Field f = ReplayRequest.class.getDeclaredField("limit");
-            f.setAccessible(true);
-            f.set(req, limit);
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
+        // limit removed from ReplayRequest; keep helper so old tests compile and don't blow up
+        // no-op by design
     }
-
-
 
     private ReplayService serviceSpy(ReplayStore store, java.util.List<com.google.gson.JsonObject> calls) {
         ReplayService svc = new ReplayService() {
@@ -552,5 +534,5 @@ public class ReplayServiceTest {
     private static java.util.List<ReplayEvent> mutable(java.util.List<ReplayEvent> in) {
         return (in == null) ? null : new java.util.ArrayList<>(in);
     }
-
 }
+

@@ -54,6 +54,14 @@
             <version>1.0.0</version>
         </dependency>
         <dependency>
+            <groupId>io.braineous</groupId>
+            <artifactId>dd-module-kafka-processor</artifactId>
+            <version>1.0.0</version>
+        </dependency>
+
+
+
+        <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter</artifactId>
             <scope>test</scope>
@@ -72,6 +80,12 @@
             <groupId>io.quarkus</groupId>
             <artifactId>quarkus-junit5</artifactId>
             <scope>test</scope>
+        </dependency>
+
+        <!-- mongoclient dependencies -->
+        <dependency>
+            <groupId>io.quarkus</groupId>
+            <artifactId>quarkus-mongodb-client</artifactId>
         </dependency>
     </dependencies>
 
