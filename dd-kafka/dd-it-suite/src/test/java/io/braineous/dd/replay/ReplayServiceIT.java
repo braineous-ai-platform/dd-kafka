@@ -7,6 +7,7 @@ import io.braineous.dd.processor.ProcessorOrchestrator;
 import io.braineous.dd.replay.model.ReplayEvent;
 import io.braineous.dd.replay.model.ReplayRequest;
 import io.braineous.dd.replay.model.ReplayResult;
+import io.braineous.dd.replay.persistence.MongoReplayStore;
 import io.braineous.dd.replay.persistence.ReplayStore;
 import io.braineous.dd.replay.services.ReplayService;
 import org.junit.jupiter.api.BeforeAll;
@@ -121,6 +122,127 @@ public class ReplayServiceIT {
         org.junit.jupiter.api.Assertions.assertEquals(1, poster.calls.get(0).getAsJsonObject("payload").get("n").getAsInt());
         org.junit.jupiter.api.Assertions.assertEquals(2, poster.calls.get(1).getAsJsonObject("payload").get("n").getAsInt());
         org.junit.jupiter.api.Assertions.assertEquals(3, poster.calls.get(2).getAsJsonObject("payload").get("n").getAsInt());
+    }
+
+    @io.quarkus.test.junit.QuarkusTest
+    public class ReplayServiceTimeParityIT {
+
+        @jakarta.inject.Inject
+        com.mongodb.client.MongoClient mongoClient;
+
+        @jakarta.inject.Inject
+        MongoReplayStore store;
+
+        private CapturingHttpPoster poster = new CapturingHttpPoster();
+
+        @org.junit.jupiter.api.BeforeEach
+        void setup() {
+            mongoClient.getDatabase(MongoReplayStore.DB)
+                    .getCollection(MongoReplayStore.INGESTION_COL)
+                    .drop();
+            forceHttpPoster(poster);
+            poster.calls.clear();
+        }
+
+        @org.junit.jupiter.api.Test
+        void parity_timeWindow_vs_timeObjectKey_same_results_and_orchestration() {
+
+            var col = mongoClient.getDatabase(MongoReplayStore.DB)
+                    .getCollection(MongoReplayStore.INGESTION_COL);
+
+            java.time.Instant t1 = java.time.Instant.parse("2026-01-07T21:00:01Z");
+            java.time.Instant t2 = java.time.Instant.parse("2026-01-07T21:00:02Z");
+            java.time.Instant t3 = java.time.Instant.parse("2026-01-07T21:00:03Z");
+            java.time.Instant t4 = java.time.Instant.parse("2026-01-07T21:00:04Z");
+
+            // Insert 4 docs, all share the same objectKey
+            col.insertOne(doc("ID-0", payload(0), t1, "OBJ-A"));
+            col.insertOne(doc("ID-1", payload(1), t2, "OBJ-A"));
+            col.insertOne(doc("ID-2", payload(2), t3, "OBJ-A"));
+            col.insertOne(doc("ID-3", payload(3), t4, "OBJ-A"));
+
+            ReplayService svc = new ReplayService();
+            svc.setStore(store);
+
+            // -------- act: time window [t1, t4)
+            ReplayRequest byWindow = new ReplayRequest();
+            set(byWindow, "fromTime", t1.toString());
+            set(byWindow, "toTime",   t4.toString());
+            set(byWindow, "stream",   "ingestion");
+            set(byWindow, "reason",   "it-test");
+
+            ReplayResult a = svc.replayByTimeWindow(byWindow);
+            java.util.List<com.google.gson.JsonObject> callsA =
+                    new java.util.ArrayList<>(poster.calls);
+
+            poster.calls.clear();
+
+            // -------- act: object key (same rows)
+            ReplayRequest byKey = new ReplayRequest();
+            set(byKey, "objectKey", "OBJ-A");
+            set(byKey, "stream",   "ingestion");
+            set(byKey, "reason",   "it-test");
+
+            ReplayResult b = svc.replayByTimeObjectKey(byKey);
+            java.util.List<com.google.gson.JsonObject> callsB =
+                    new java.util.ArrayList<>(poster.calls);
+
+            // -------- assert parity
+            org.junit.jupiter.api.Assertions.assertTrue(a.ok());
+            org.junit.jupiter.api.Assertions.assertTrue(b.ok());
+            org.junit.jupiter.api.Assertions.assertEquals(a.matchedCount(), b.matchedCount());
+            org.junit.jupiter.api.Assertions.assertEquals(a.replayedCount(), b.replayedCount());
+            org.junit.jupiter.api.Assertions.assertEquals(3, a.replayedCount()); // t1,t2,t3
+
+            // same payloads, same order
+            org.junit.jupiter.api.Assertions.assertEquals(callsA, callsB);
+        }
+
+        // ---------------- helpers ----------------
+
+        private static org.bson.Document doc(
+                String id, String payload, java.time.Instant ts, String objectKey) {
+            return new org.bson.Document()
+                    .append("ingestionId", id)
+                    .append("payload", payload)
+                    .append("createdAt", java.util.Date.from(ts))
+                    .append("objectKey", objectKey);
+        }
+
+        private static String payload(int n) {
+            return """
+        { "payload": { "n": %d } }
+        """.formatted(n);
+        }
+
+        private static void set(Object target, String field, Object value) {
+            try {
+                var f = target.getClass().getDeclaredField(field);
+                f.setAccessible(true);
+                f.set(target, value);
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
+        }
+
+        private static void forceHttpPoster(HttpPoster poster) {
+            try {
+                var f = ProcessorOrchestrator.class.getDeclaredField("httpPoster");
+                f.setAccessible(true);
+                f.set(ProcessorOrchestrator.getInstance(), poster);
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
+        }
+
+        static class CapturingHttpPoster implements HttpPoster {
+            final java.util.List<com.google.gson.JsonObject> calls = new java.util.ArrayList<>();
+            @Override
+            public int post(String endpoint, String payload) {
+                calls.add(com.google.gson.JsonParser.parseString(payload).getAsJsonObject());
+                return 200;
+            }
+        }
     }
 
     //-------helpers---------------------------------
