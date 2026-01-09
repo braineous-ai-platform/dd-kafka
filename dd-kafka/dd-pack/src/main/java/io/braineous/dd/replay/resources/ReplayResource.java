@@ -33,50 +33,70 @@ public class ReplayResource {
 
     @POST
     @Path("/time-window")
-    public ReplayResult replayByTimeWindow(ReplayRequest request){
+    public jakarta.ws.rs.core.Response replayByTimeWindow(ReplayRequest request){
         if(!gate.on("dd.feature.replay.enabled"))
-            return ReplayResult.fail("DD-CONFIG-replay_disabled");
+            return jakarta.ws.rs.core.Response.status(jakarta.ws.rs.core.Response.Status.BAD_REQUEST)
+                    .entity(ReplayResult.fail("DD-CONFIG-replay_disabled"))
+                    .build();
 
         ReplayResult bad = validateTimeWindow(request);
-        if (bad != null) return bad;
+        if (bad != null)
+            return jakarta.ws.rs.core.Response.status(jakarta.ws.rs.core.Response.Status.BAD_REQUEST)
+                    .entity(bad)
+                    .build();
 
-        return service.replayByTimeWindow(request);
+        return jakarta.ws.rs.core.Response.ok(service.replayByTimeWindow(request)).build();
     }
 
     @POST
     @Path("/time-object-key")
-    public ReplayResult replayByTimeObjectKey(ReplayRequest request){
+    public jakarta.ws.rs.core.Response replayByTimeObjectKey(ReplayRequest request){
         if(!gate.on("dd.feature.replay.enabled"))
-            return ReplayResult.fail("DD-CONFIG-replay_disabled");
+            return jakarta.ws.rs.core.Response.status(jakarta.ws.rs.core.Response.Status.BAD_REQUEST)
+                    .entity(ReplayResult.fail("DD-CONFIG-replay_disabled"))
+                    .build();
 
         ReplayResult bad = validateObjectKey(request);
-        if (bad != null) return bad;
+        if (bad != null)
+            return jakarta.ws.rs.core.Response.status(jakarta.ws.rs.core.Response.Status.BAD_REQUEST)
+                    .entity(bad)
+                    .build();
 
-        return service.replayByTimeObjectKey(request);
+        return jakarta.ws.rs.core.Response.ok(service.replayByTimeObjectKey(request)).build();
     }
 
     @POST
     @Path("/domain-dlq-id")
-    public ReplayResult replayByDomainDlqId(ReplayRequest request){
+    public jakarta.ws.rs.core.Response replayByDomainDlqId(ReplayRequest request){
         if(!gate.on("dd.feature.replay.enabled"))
-            return ReplayResult.fail("DD-CONFIG-replay_disabled");
+            return jakarta.ws.rs.core.Response.status(jakarta.ws.rs.core.Response.Status.BAD_REQUEST)
+                    .entity(ReplayResult.fail("DD-CONFIG-replay_disabled"))
+                    .build();
 
         ReplayResult bad = validateDlqId(request);
-        if (bad != null) return bad;
+        if (bad != null)
+            return jakarta.ws.rs.core.Response.status(jakarta.ws.rs.core.Response.Status.BAD_REQUEST)
+                    .entity(bad)
+                    .build();
 
-        return service.replayByDomainDlqId(request);
+        return jakarta.ws.rs.core.Response.ok(service.replayByDomainDlqId(request)).build();
     }
 
     @POST
     @Path("/system-dlq-id")
-    public ReplayResult replayBySystemDlqId(ReplayRequest request){
+    public jakarta.ws.rs.core.Response replayBySystemDlqId(ReplayRequest request){
         if(!gate.on("dd.feature.replay.enabled"))
-            return ReplayResult.fail("DD-CONFIG-replay_disabled");
+            return jakarta.ws.rs.core.Response.status(jakarta.ws.rs.core.Response.Status.BAD_REQUEST)
+                    .entity(ReplayResult.fail("DD-CONFIG-replay_disabled"))
+                    .build();
 
         ReplayResult bad = validateDlqId(request);
-        if (bad != null) return bad;
+        if (bad != null)
+            return jakarta.ws.rs.core.Response.status(jakarta.ws.rs.core.Response.Status.BAD_REQUEST)
+                    .entity(bad)
+                    .build();
 
-        return service.replayBySystemDlqId(request);
+        return jakarta.ws.rs.core.Response.ok(service.replayBySystemDlqId(request)).build();
     }
 
     //-------Validators --------------------------

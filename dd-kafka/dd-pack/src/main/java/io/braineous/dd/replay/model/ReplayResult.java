@@ -8,7 +8,10 @@ public class ReplayResult {
     private int matchedCount;
     private String reason;   // error / disabled / bad request
 
+    // Jackson + factory-only usage
     private ReplayResult() {}
+
+    // ---------- factories ----------
 
     public static ReplayResult ok(ReplayRequest req, int replayed, int matched) {
         ReplayResult r = new ReplayResult();
@@ -42,6 +45,31 @@ public class ReplayResult {
         return r;
     }
 
+    // ---------- Jackson-visible getters ----------
+    // (method names intentionally JavaBean-compliant)
+
+    public boolean isOk() {
+        return ok;
+    }
+
+    public String getReplayId() {
+        return replayId;
+    }
+
+    public int getReplayedCount() {
+        return replayedCount;
+    }
+
+    public int getMatchedCount() {
+        return matchedCount;
+    }
+
+    public String getReason() {
+        return reason;
+    }
+
+    // ---------- internal / domain-style accessors ----------
+    // (kept for consistency with your call sites)
 
     public boolean ok() { return ok; }
     public String replayId() { return replayId; }
@@ -49,6 +77,7 @@ public class ReplayResult {
     public int matchedCount() { return matchedCount; }
     public String reason() { return reason; }
 }
+
 
 
 

@@ -24,7 +24,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 @ApplicationScoped
 public class MongoIngestionStore implements IngestionStore {
 
-    static final String DB  = "dd";
+    public static final String DB  = "dd";
     public static final String COL = "ingestion";
 
     private static final String F_SNAPSHOT_HASH = "snapshotHash";
