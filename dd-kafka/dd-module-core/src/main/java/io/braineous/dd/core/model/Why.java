@@ -39,4 +39,8 @@ public class Why {
         return new com.google.gson.Gson().toJson(this);
     }
 
+    public String reason(){
+        return this.reason;
+    }
+
 }

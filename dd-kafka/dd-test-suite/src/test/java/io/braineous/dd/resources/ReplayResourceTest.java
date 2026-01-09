@@ -1,4 +1,4 @@
-package io.braineous.dd.replay.resources;
+package io.braineous.dd.resources;
 
 import ai.braineous.cgo.config.ConfigGate;
 import ai.braineous.cgo.config.ConfigGates;

@@ -22,9 +22,6 @@ public class ProcessorOrchestrator {
     }
 
     public void setHttpPoster(HttpPoster httpPoster) {
-        if(httpPoster == null || this.httpPoster != null){
-            return;
-        }
         this.httpPoster = httpPoster;
     }
 
