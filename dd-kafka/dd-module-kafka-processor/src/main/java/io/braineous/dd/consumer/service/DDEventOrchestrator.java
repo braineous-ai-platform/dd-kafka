@@ -1,17 +1,25 @@
 package io.braineous.dd.consumer.service;
 
 import ai.braineous.rag.prompt.cgo.api.*;
+import ai.braineous.rag.prompt.observe.Console;
 import ai.braineous.rag.prompt.services.cgo.causal.CausalLLMBridge;
 import com.google.gson.JsonArray;
 
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import io.braineous.dd.consumer.service.persistence.IngestionReceipt;
+import io.braineous.dd.consumer.service.persistence.IngestionStore;
+import io.braineous.dd.consumer.service.persistence.MongoIngestionStore;
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
 
 @ApplicationScoped
 public class DDEventOrchestrator {
     private LLMBridge llmBridge = new CausalLLMBridge();
+
+    @Inject
+    private IngestionStore store;
 
 
     public GraphView orchestrate(String ingestionStr) {
@@ -35,7 +43,17 @@ public class DDEventOrchestrator {
                     null);
 
             // bridge to CGO
-            return this.llmBridge.submit(context);
+            GraphView view = this.llmBridge.submit(context);
+
+            // ---- persist raw envelope for Replay/time-window surfaces ----
+            IngestionReceipt receipt = store.storeIngestion(
+                    ingestionStr,
+                    view
+
+            );
+
+
+            return view;
 
         } catch (Exception e) {
             /*//TODO: send_to_dlq

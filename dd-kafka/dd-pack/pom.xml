@@ -53,11 +53,13 @@
             <artifactId>dd-module-processor</artifactId>
             <version>1.0.0</version>
         </dependency>
+        <!--
         <dependency>
             <groupId>io.braineous</groupId>
             <artifactId>dd-module-kafka-processor</artifactId>
             <version>1.0.0</version>
         </dependency>
+        -->
 
 
 

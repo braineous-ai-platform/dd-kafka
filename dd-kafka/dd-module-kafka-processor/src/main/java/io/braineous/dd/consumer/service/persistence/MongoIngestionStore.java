@@ -3,19 +3,18 @@ package io.braineous.dd.consumer.service.persistence;
 import ai.braineous.rag.prompt.cgo.api.GraphView;
 import ai.braineous.rag.prompt.models.cgo.graph.GraphSnapshot;
 import ai.braineous.rag.prompt.models.cgo.graph.SnapshotHash;
-import io.braineous.dd.core.model.Why;
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
-
-
+import ai.braineous.rag.prompt.observe.Console;
 import com.mongodb.ErrorCategory;
 import com.mongodb.MongoWriteException;
 import com.mongodb.client.MongoClient;
 import com.mongodb.client.MongoCollection;
 import com.mongodb.client.model.Filters;
 import com.mongodb.client.model.UpdateOptions;
+import io.braineous.dd.core.model.Why;
+import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import org.bson.Document;
+import org.bson.conversions.Bson;
 
 import java.time.Instant;
 import java.util.Date;
@@ -27,6 +26,7 @@ public class MongoIngestionStore implements IngestionStore {
     public static final String DB  = "dd";
     public static final String COL = "ingestion";
 
+    private static final String F_ID_KEY        = "idKey";
     private static final String F_SNAPSHOT_HASH = "snapshotHash";
     private static final String F_PAYLOAD_HASH  = "payloadHash";
 
@@ -38,9 +38,9 @@ public class MongoIngestionStore implements IngestionStore {
     // Best-effort only. Never break ingestion.
     private void ensureIndexes(MongoCollection<Document> col) {
         try {
-            // If a UNIQUE index exists and a race happens, treat as idempotent success.
-            // NOTE: ingestionId returned may not match the stored document (we did not read-back).
-
+            // Idempotency contract: UNIQUE on idKey
+            // If race happens, treat duplicate key as idempotent success (no read-back).
+            col.createIndex(new Document(F_ID_KEY, 1), new com.mongodb.client.model.IndexOptions().unique(true));
 
             col.createIndex(new Document("createdAt", -1));
             col.createIndex(new Document(F_SNAPSHOT_HASH, 1));
@@ -55,6 +55,7 @@ public class MongoIngestionStore implements IngestionStore {
                 .getDatabase(DB)
                 .getCollection(COL);
     }
+
 
     @Override
     public IngestionReceipt storeIngestion(String payload, GraphView view) {
@@ -89,7 +90,11 @@ public class MongoIngestionStore implements IngestionStore {
         GraphSnapshot snapshot = (GraphSnapshot) view;
         SnapshotHash snapshotHash = snapshot.snapshotHash();
 
-        String snap = (snapshotHash == null ? null : snapshotHash.getValue());
+        String snap = null;
+        if (snapshotHash != null) {
+            snap = snapshotHash.getValue();
+        }
+
         if (snap == null || snap.trim().isEmpty()) {
             return IngestionReceipt.failDomain(
                     ingestionId,
@@ -110,15 +115,11 @@ public class MongoIngestionStore implements IngestionStore {
             ensureIndexes(col);
         }
 
-
-        // ---------- mongo upsert (idempotent) ----------
+        // ---------- mongo upsert (single op, idempotent on snapshotHash) ----------
         try {
-            var filter = Filters.and(
-                    Filters.eq(F_SNAPSHOT_HASH, snap),
-                    Filters.eq(F_PAYLOAD_HASH, payloadHash)
-            );
+            Bson filter = Filters.eq(F_SNAPSHOT_HASH, snap);
 
-            var doc = new Document()
+            Document doc = new Document()
                     .append("ingestionId", ingestionId)
                     .append(F_SNAPSHOT_HASH, snap)
                     .append(F_PAYLOAD_HASH, payloadHash)
@@ -127,14 +128,16 @@ public class MongoIngestionStore implements IngestionStore {
                     .append("edgeCount", edgeCount)
                     .append("createdAt", Date.from(Instant.now()));
 
-            var update = new Document("$setOnInsert", doc);
-            var opts = new UpdateOptions().upsert(true);
+            Document update = new Document("$set", doc);
+
+            UpdateOptions opts = new UpdateOptions().upsert(true);
 
             col.updateOne(filter, update, opts);
 
         } catch (MongoWriteException mwx) {
-            // If a UNIQUE index exists and a race happens, treat as idempotent success.
-            if (mwx.getError() != null && mwx.getError().getCategory() == ErrorCategory.DUPLICATE_KEY) {
+            if (mwx.getError() != null
+                    && mwx.getError().getCategory() == ErrorCategory.DUPLICATE_KEY) {
+
                 return IngestionReceipt.ok(
                         ingestionId,
                         payloadHash,
@@ -178,11 +181,13 @@ public class MongoIngestionStore implements IngestionStore {
         );
     }
 
+
+
     private boolean indexBootstrapEnabled() {
         return "true".equalsIgnoreCase(System.getProperty("dd.ingestion.index.bootstrap", "false"));
     }
-
 }
+
 
 
 

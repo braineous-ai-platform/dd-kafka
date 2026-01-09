@@ -1,8 +1,8 @@
 package io.braineous.dd.replay.persistence;
 
+import ai.braineous.rag.prompt.observe.Console;
 import com.mongodb.client.MongoClient;
 import com.mongodb.client.MongoCollection;
-import io.braineous.dd.consumer.service.persistence.MongoIngestionStore;
 import io.braineous.dd.replay.model.ReplayEvent;
 import io.braineous.dd.replay.model.ReplayRequest;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -15,7 +15,7 @@ import java.util.List;
 public class MongoReplayStore implements ReplayStore{
 
     public static final String DB  = "dd";
-    public static final String INGESTION_COL = MongoIngestionStore.COL;
+    public static final String INGESTION_COL = "ingestion";
 
     @Inject
     MongoClient mongoClient;
@@ -26,30 +26,50 @@ public class MongoReplayStore implements ReplayStore{
                 .getCollection(INGESTION_COL);
     }
 
+
     @Override
     public List<ReplayEvent> findByTimeWindow(ReplayRequest request) {
-        // window semantics: [from, to)  (to is exclusive)
 
+        Console.log("REPLAY_STORE_IMPL", this.getClass().getName());
+
+        // window semantics: [from, to)  (to is exclusive)
         if (request == null) return List.of();
 
         final java.time.Instant from;
         final java.time.Instant to;
 
         try {
+            // NOTE: trim() MUST be applied before Instant.parse(), else trailing whitespace/newlines break parsing
             String fromS = request.fromTime();
             String toS   = request.toTime();
 
-            if (fromS == null || fromS.trim().isEmpty()) return List.of();
-            if (toS == null   || toS.trim().isEmpty())   return List.of();
+            if (fromS == null) return List.of();
+            if (toS == null)   return List.of();
+
+            fromS = fromS.trim();
+            toS   = toS.trim();
+
+            if (fromS.isEmpty()) return List.of();
+            if (toS.isEmpty())   return List.of();
 
             from = java.time.Instant.parse(fromS);
             to   = java.time.Instant.parse(toS);
         } catch (Exception e) {
+            Console.log("REPLAY_TIMEWINDOW_PARSE_FAIL", String.valueOf(e));
             return List.of();
         }
 
         if (!from.isBefore(to)) return List.of();
 
+        // dump exact query bounds + target
+        Console.log("REPLAY_QUERY_DUMP",
+                "db=" + DB +
+                        " col=" + INGESTION_COL +
+                        " from=" + from +
+                        " to=" + to +
+                        " fromDate=" + java.util.Date.from(from) +
+                        " toDate=" + java.util.Date.from(to)
+        );
 
         var filter = com.mongodb.client.model.Filters.and(
                 com.mongodb.client.model.Filters.gte("createdAt", java.util.Date.from(from)),
@@ -62,8 +82,13 @@ public class MongoReplayStore implements ReplayStore{
         for (Document d : collection().find(filter).sort(sort)) {
             out.add(mapDocToReplayEvent(d));
         }
+
+        Console.log("REPLAY_MATCHED_COUNT", out.size());
+        Console.log("REPLAY_MONGO_COUNT", collection().countDocuments(filter));
+
         return java.util.List.copyOf(out);
     }
+
 
     @Override
     public List<ReplayEvent> findByTimeObjectKey(ReplayRequest request) {

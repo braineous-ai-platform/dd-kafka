@@ -2,6 +2,7 @@ package io.braineous.dd.resources;
 
 
 import ai.braineous.rag.prompt.observe.Console;
+import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import io.braineous.dd.core.model.Why;
@@ -37,6 +38,10 @@ public class IngestionResource {
     @Path("/ingestion")
     public jakarta.ws.rs.core.Response ingestion(IngestionRequest request){
 
+        //temp
+        Console.log("it_request_payload_raw", request == null ? null : request.getPayload());
+
+
         // ---- fail-fast: request ----
         if (request == null) {
             Console.log("ingestion_400", "request_null");
@@ -70,7 +75,14 @@ public class IngestionResource {
         // ---- orchestrate ----
         ProcessorResult result = this.orch.orchestrate(payloadJson);
         Console.log("ingestion_200", result);
-        return jakarta.ws.rs.core.Response.ok(result).build();
+
+        // serialize with Gson so Gson JsonObject is handled correctly
+                String json = new Gson().toJson(result);
+
+                return jakarta.ws.rs.core.Response
+                        .ok(json, MediaType.APPLICATION_JSON)
+                        .build();
+
     }
 
 
