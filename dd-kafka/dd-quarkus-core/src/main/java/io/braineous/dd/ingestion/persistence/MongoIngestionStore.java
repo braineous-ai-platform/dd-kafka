@@ -1,15 +1,13 @@
-package io.braineous.dd.consumer.service.persistence;
+package io.braineous.dd.ingestion.persistence;
 
-import ai.braineous.rag.prompt.cgo.api.GraphView;
-import ai.braineous.rag.prompt.models.cgo.graph.GraphSnapshot;
 import ai.braineous.rag.prompt.models.cgo.graph.SnapshotHash;
-import ai.braineous.rag.prompt.observe.Console;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import com.mongodb.ErrorCategory;
 import com.mongodb.MongoWriteException;
 import com.mongodb.client.MongoClient;
 import com.mongodb.client.MongoCollection;
 import com.mongodb.client.model.Filters;
-import com.mongodb.client.model.UpdateOptions;
 import io.braineous.dd.core.model.Why;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
@@ -17,6 +15,8 @@ import org.bson.Document;
 import org.bson.conversions.Bson;
 
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.Date;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -27,7 +27,7 @@ public class MongoIngestionStore implements IngestionStore {
     public static final String COL = "ingestion";
 
     private static final String F_ID_KEY        = "idKey";
-    private static final String F_SNAPSHOT_HASH = "snapshotHash";
+    public static final String F_SNAPSHOT_HASH = "snapshotHash";
     private static final String F_PAYLOAD_HASH  = "payloadHash";
 
     private final AtomicBoolean ingestionIndexed = new AtomicBoolean(false);
@@ -58,21 +58,30 @@ public class MongoIngestionStore implements IngestionStore {
 
 
     @Override
-    public IngestionReceipt storeIngestion(String payload, GraphView view) {
-        String ingestionId = IngestionReceipt.nextIngestionId();
-
+    public IngestionReceipt storeIngestion(String payload) {
+        String ingestionId = null;
         // ---------- fail-fast: payload ----------
         if (payload == null || payload.trim().isEmpty()) {
             return IngestionReceipt.failDomain(
                     ingestionId,
-                    null,
-                    null,
+                    null, null,
                     new Why("DD-ING-payload_blank", "payload cannot be blank"),
-                    0, 0,
                     "mongo"
             );
         }
 
+        JsonObject ingestionJson = JsonParser.parseString(payload).getAsJsonObject();
+        if(!ingestionJson.has("ingestionId")) {
+            return IngestionReceipt.failDomain(
+                    ingestionId,
+                    null, null,
+                    new Why("DD-ING-ingestion-id-missing", "ingestion id must be assigned by the consumer"),
+                    "mongo"
+            );
+        }
+        ingestionId = ingestionJson.get("ingestionId").getAsString();
+
+        JsonObject view = ingestionJson.get("view").getAsJsonObject();
         // ---------- fail-fast: view ----------
         if (view == null) {
             return IngestionReceipt.failDomain(
@@ -80,20 +89,15 @@ public class MongoIngestionStore implements IngestionStore {
                     IngestionReceipt.sha256Hex(payload),
                     null,
                     new Why("DD-ING-graphView_null", "graphView cannot be null"),
-                    0, 0,
                     "mongo"
             );
         }
 
         String payloadHash = IngestionReceipt.sha256Hex(payload);
 
-        GraphSnapshot snapshot = (GraphSnapshot) view;
-        SnapshotHash snapshotHash = snapshot.snapshotHash();
+        String snap = view.get(MongoIngestionStore.F_SNAPSHOT_HASH).getAsString();
 
-        String snap = null;
-        if (snapshotHash != null) {
-            snap = snapshotHash.getValue();
-        }
+        SnapshotHash snapshotHash = new SnapshotHash(snap);
 
         if (snap == null || snap.trim().isEmpty()) {
             return IngestionReceipt.failDomain(
@@ -101,13 +105,10 @@ public class MongoIngestionStore implements IngestionStore {
                     payloadHash,
                     snapshotHash,
                     new Why("DD-ING-snapshotHash_blank", "snapshotHash cannot be blank"),
-                    0, 0,
                     "mongo"
             );
         }
 
-        int nodeCount = snapshot.nodes().size();
-        int edgeCount = snapshot.edges().size();
 
         MongoCollection<Document> col = collection();
 
@@ -115,35 +116,64 @@ public class MongoIngestionStore implements IngestionStore {
             ensureIndexes(col);
         }
 
-        // ---------- mongo upsert (single op, idempotent on snapshotHash) ----------
+        // ---------- mongo insert-or-touch (idempotent on snapshotHash) ----------
         try {
             Bson filter = Filters.eq(F_SNAPSHOT_HASH, snap);
+
+            Document existing = col.find(filter).first();
+
+            if (existing != null) {
+
+                Object existingIngestionIdObj = existing.get("ingestionId");
+                if (existingIngestionIdObj != null) {
+                    ingestionId = String.valueOf(existingIngestionIdObj);
+                }
+
+                // touch only createdAt (their reality: last time they sent it)
+                Document touch = new Document("$set",
+                        new Document("createdAt", Date.from(Instant.now()))
+                );
+
+                col.updateOne(filter, touch);
+
+                return IngestionReceipt.ok(
+                        ingestionId,
+                        payloadHash,
+                        snapshotHash,
+                        "mongo"
+                );
+            }
 
             Document doc = new Document()
                     .append("ingestionId", ingestionId)
                     .append(F_SNAPSHOT_HASH, snap)
                     .append(F_PAYLOAD_HASH, payloadHash)
                     .append("payload", payload)
-                    .append("nodeCount", nodeCount)
-                    .append("edgeCount", edgeCount)
                     .append("createdAt", Date.from(Instant.now()));
 
-            Document update = new Document("$set", doc);
-
-            UpdateOptions opts = new UpdateOptions().upsert(true);
-
-            col.updateOne(filter, update, opts);
+            col.insertOne(doc);
 
         } catch (MongoWriteException mwx) {
             if (mwx.getError() != null
                     && mwx.getError().getCategory() == ErrorCategory.DUPLICATE_KEY) {
 
+                // race: someone inserted after our find; touch createdAt only
+                Bson filter = Filters.eq(F_SNAPSHOT_HASH, snap);
+                Document touch = new Document("$set",
+                        new Document("createdAt", Date.from(Instant.now()))
+                );
+                col.updateOne(filter, touch);
+
+                // keep axis stable if we can read it
+                Document existing = col.find(filter).first();
+                if (existing != null && existing.get("ingestionId") != null) {
+                    ingestionId = String.valueOf(existing.get("ingestionId"));
+                }
+
                 return IngestionReceipt.ok(
                         ingestionId,
                         payloadHash,
                         snapshotHash,
-                        nodeCount,
-                        edgeCount,
                         "mongo"
                 );
             }
@@ -153,8 +183,6 @@ public class MongoIngestionStore implements IngestionStore {
                     payloadHash,
                     snapshotHash,
                     new Why("DD-ING-mongo_write_failed", mwx.getMessage()),
-                    nodeCount,
-                    edgeCount,
                     "mongo"
             );
 
@@ -163,22 +191,52 @@ public class MongoIngestionStore implements IngestionStore {
                     ingestionId,
                     payloadHash,
                     snapshotHash,
-                    new Why("DD-ING-mongo_upsert_failed", e.getMessage()),
-                    nodeCount,
-                    edgeCount,
+                    new Why("DD-ING-mongo_insert_failed", e.getMessage()),
                     "mongo"
             );
         }
+
 
         // ---------- success ----------
         return IngestionReceipt.ok(
                 ingestionId,
                 payloadHash,
                 snapshotHash,
-                nodeCount,
-                edgeCount,
                 "mongo"
         );
+    }
+
+    @Override
+    public String resolveIngestionId(String payload, String snap) {
+
+        if (snap == null || snap.trim().length()==0) {
+            return null;
+        }
+
+
+        MongoCollection<Document> col = collection();
+
+        try {
+            Bson filter = Filters.eq(F_SNAPSHOT_HASH, snap);
+            Document existing = col.find(filter).first();
+
+            if (existing != null) {
+                Object existingIngestionIdObj = existing.get("ingestionId");
+                if (existingIngestionIdObj != null) {
+                    String id = String.valueOf(existingIngestionIdObj);
+                    if (id != null && id.trim().length() > 0) {
+                        return id;
+                    }
+                }
+            }
+        } catch (Exception ignored) {
+            // fall through to generate
+        }
+
+        // axis birth (first time this snapshot is seen OR mongo lookup hiccup)
+        String day = LocalDate.now(ZoneOffset.UTC).toString().replace("-", "");
+        long nano = System.nanoTime();
+        return "DD-ING-" + day + "-" + nano;
     }
 
 

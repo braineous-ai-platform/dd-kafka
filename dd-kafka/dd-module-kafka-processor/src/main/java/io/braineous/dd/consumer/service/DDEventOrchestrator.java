@@ -1,70 +1,61 @@
 package io.braineous.dd.consumer.service;
 
 import ai.braineous.rag.prompt.cgo.api.*;
-import ai.braineous.rag.prompt.observe.Console;
-import ai.braineous.rag.prompt.services.cgo.causal.CausalLLMBridge;
 import com.google.gson.JsonArray;
-
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
-import io.braineous.dd.consumer.service.persistence.IngestionReceipt;
-import io.braineous.dd.consumer.service.persistence.IngestionStore;
-import io.braineous.dd.consumer.service.persistence.MongoIngestionStore;
+import io.braineous.dd.core.model.Why;
+import io.braineous.dd.ingestion.persistence.IngestionReceipt;
+import io.braineous.dd.ingestion.persistence.IngestionStore;
+
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
 @ApplicationScoped
 public class DDEventOrchestrator {
-    private LLMBridge llmBridge = new CausalLLMBridge();
 
     @Inject
     private IngestionStore store;
-
-
-    public GraphView orchestrate(String ingestionStr) {
-        try {
-            LLMContext context = new LLMContext();
-
-            FactExtractor factExtractor = new DDEventFactExtractor();
-
-            JsonArray ddEvents = new JsonArray();
-            JsonElement ddEventElement = JsonParser.parseString(ingestionStr);
-            if (ddEventElement.isJsonArray()) {
-                ddEvents = ddEventElement.getAsJsonArray();
-            } else {
-                ddEvents.add(ddEventElement.getAsJsonObject());
-            }
-
-            context.build("kafka_events",
-                    ddEvents.toString(),
-                    factExtractor,
-                    null,
-                    null);
-
-            // bridge to CGO
-            GraphView view = this.llmBridge.submit(context);
-
-            // ---- persist raw envelope for Replay/time-window surfaces ----
-            IngestionReceipt receipt = store.storeIngestion(
-                    ingestionStr,
-                    view
-
-            );
-
-
-            return view;
-
-        } catch (Exception e) {
-            /*//TODO: send_to_dlq
-
-
-            //also print in service log
-            //TODO: think what to return or throw exception
-            return null;*/
-            throw new RuntimeException(e);
-            
-        }
+    public void setStore(IngestionStore store){
+        this.store = store;
     }
 
+    public IngestionStore getStore() {
+        return store;
+    }
+
+    public IngestionReceipt orchestrate(String ingestionStr) {
+        try {
+
+            // ---------- fail-fast: payload ----------
+            if (ingestionStr == null || ingestionStr.trim().isEmpty()) {
+                throw new IllegalArgumentException("DD-ING-events_blank");
+            }
+
+            JsonElement ddEventElement = JsonParser.parseString(ingestionStr);
+
+            JsonObject ddEvent;
+            if (ddEventElement.isJsonArray()) {
+                JsonArray arr = ddEventElement.getAsJsonArray();
+                if (arr == null || arr.size() == 0) {
+                    throw new IllegalArgumentException("DD-ING-events_empty");
+                }
+                ddEvent = arr.get(0).getAsJsonObject();
+            } else if (ddEventElement.isJsonObject()) {
+                ddEvent = ddEventElement.getAsJsonObject();
+            } else {
+                throw new IllegalArgumentException("DD-ING-events_not_object");
+            }
+
+            // ---- persist raw envelope for Replay/time-window surfaces ----
+            return store.storeIngestion(ddEvent.toString());
+
+        } catch (IllegalArgumentException iae) {
+            // hard domain fail: no ingestionId axis possible
+            throw iae;
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
 }

@@ -2,17 +2,24 @@ package io.braineous.dd.resources;
 
 import ai.braineous.rag.prompt.observe.Console;
 import io.braineous.dd.core.processor.HttpPoster;
-import io.braineous.dd.processor.ProcessorResult;
+import io.braineous.dd.processor.ProcessorOrchestrator;
 import io.braineous.dd.replay.model.IngestionRequest;
+import io.quarkus.test.junit.QuarkusTest;
+import jakarta.inject.Inject;
 import org.junit.jupiter.api.Test;
 
+@QuarkusTest
 public class IngestionResourceTest {
+
+    @Inject
+    private IngestionResource res;
+
+    @Inject
+    private ProcessorOrchestrator orch;
+
 
     @Test
     void http_ingestion_payloadBlank_returns400() {
-
-        IngestionResource res = new IngestionResource();
-
         IngestionRequest req = org.mockito.Mockito.mock(IngestionRequest.class);
         org.mockito.Mockito.when(req.getPayload()).thenReturn("   ");
 
@@ -25,18 +32,27 @@ public class IngestionResourceTest {
         Object entity = resp.getEntity();
         org.junit.jupiter.api.Assertions.assertNotNull(entity);
 
-        ProcessorResult pr = (ProcessorResult) entity;
-        Console.log("ut_resp_entity", pr);
+        String json = (String) entity;
+        Console.log("ut_resp_entity", json);
 
-        org.junit.jupiter.api.Assertions.assertFalse(pr.isOk());
-        org.junit.jupiter.api.Assertions.assertEquals("DD-INGEST-payload_blank", pr.getWhy().reason());
+        com.google.gson.JsonObject jo =
+                com.google.gson.JsonParser.parseString(json).getAsJsonObject();
+
+        // assertFalse(pr.isOk())
+                org.junit.jupiter.api.Assertions.assertFalse(
+                        jo.get("ok").getAsBoolean()
+                );
+
+        // assertEquals(pr.getWhy().reason())
+                org.junit.jupiter.api.Assertions.assertEquals(
+                        "DD-INGEST-payload_blank",
+                        jo.getAsJsonObject("why").get("reason").getAsString()
+                );
+
     }
 
     @Test
     void http_ingestion_validEvent_returns200_andCallsPoster() {
-
-        IngestionResource res = new IngestionResource();
-
         FakeHttpPoster fake = new FakeHttpPoster(200);
         res.setHttpPoster(fake);
 
@@ -64,29 +80,37 @@ public class IngestionResourceTest {
         Console.log("ut_resp_status", resp.getStatus());
         org.junit.jupiter.api.Assertions.assertEquals(200, resp.getStatus());
 
-        ProcessorResult pr = (ProcessorResult) resp.getEntity();
-        Console.log("ut_resp_entity", pr);
 
-        org.junit.jupiter.api.Assertions.assertNotNull(pr);
-        org.junit.jupiter.api.Assertions.assertTrue(pr.isOk());
+        String json = (String) resp.getEntity();
+        Console.log("ut_resp_entity", json);
+
+        com.google.gson.JsonObject jo =
+                com.google.gson.JsonParser.parseString(json).getAsJsonObject();
+
+        // assertNotNull(pr)
+                org.junit.jupiter.api.Assertions.assertNotNull(jo);
+
+        // assertTrue(pr.isOk())
+                org.junit.jupiter.api.Assertions.assertTrue(
+                        jo.get("ok").getAsBoolean()
+                );
 
         // poster was invoked (via DDProducerClient)
-        org.junit.jupiter.api.Assertions.assertEquals(1, fake.calls);
+                org.junit.jupiter.api.Assertions.assertEquals(1, fake.calls);
 
         // internal endpoint string used by orchestrator (must stay in sync)
-        org.junit.jupiter.api.Assertions.assertEquals("/api/ingestion", fake.lastEndpoint);
+                org.junit.jupiter.api.Assertions.assertEquals("/api/ingestion", fake.lastEndpoint);
 
         // sanity: body flowed through
-        org.junit.jupiter.api.Assertions.assertNotNull(fake.lastJsonBody);
-        org.junit.jupiter.api.Assertions.assertTrue(fake.lastJsonBody.contains("\"kafka\""));
-        org.junit.jupiter.api.Assertions.assertTrue(fake.lastJsonBody.contains("\"payload\""));
+                org.junit.jupiter.api.Assertions.assertNotNull(fake.lastJsonBody);
+                org.junit.jupiter.api.Assertions.assertTrue(fake.lastJsonBody.contains("\"kafka\""));
+                org.junit.jupiter.api.Assertions.assertTrue(fake.lastJsonBody.contains("\"payload\""));
+
+
     }
 
     @Test
     void http_ingestion_missingKafkaTopic_returns200_andOkFalse() {
-
-        IngestionResource res = new IngestionResource();
-
         FakeHttpPoster fake = new FakeHttpPoster(200);
         res.setHttpPoster(fake);
 
@@ -112,24 +136,33 @@ public class IngestionResourceTest {
         Console.log("ut_resp_status", resp.getStatus());
         org.junit.jupiter.api.Assertions.assertEquals(200, resp.getStatus());
 
-        ProcessorResult pr = (ProcessorResult) resp.getEntity();
-        Console.log("ut_resp_entity", pr);
+        String json = (String) resp.getEntity();
+        Console.log("ut_resp_entity", json);
 
-        org.junit.jupiter.api.Assertions.assertNotNull(pr);
-        org.junit.jupiter.api.Assertions.assertFalse(pr.isOk());
+        com.google.gson.JsonObject jo =
+                com.google.gson.JsonParser.parseString(json).getAsJsonObject();
+
+        // assertNotNull(pr)
+                org.junit.jupiter.api.Assertions.assertNotNull(jo);
+
+        // assertFalse(pr.isOk())
+                org.junit.jupiter.api.Assertions.assertFalse(
+                        jo.get("ok").getAsBoolean()
+                );
 
         // Orchestrator validation reason
-        org.junit.jupiter.api.Assertions.assertEquals("DD-ORCH-VALIDATE-kafka_topic", pr.getWhy().reason());
+                org.junit.jupiter.api.Assertions.assertEquals(
+                        "DD-ORCH-VALIDATE-kafka_topic",
+                        jo.getAsJsonObject("why").get("reason").getAsString()
+                );
 
         // Validation should short-circuit; poster should not be called
-        org.junit.jupiter.api.Assertions.assertEquals(0, fake.calls);
+                org.junit.jupiter.api.Assertions.assertEquals(0, fake.calls);
+
     }
 
     @Test
     void http_ingestion_payloadValueNotBase64_returns200_andOkFalse() {
-
-        IngestionResource res = new IngestionResource();
-
         FakeHttpPoster fake = new FakeHttpPoster(200);
         res.setHttpPoster(fake);
 
@@ -156,25 +189,29 @@ public class IngestionResourceTest {
         Console.log("ut_resp_status", resp.getStatus());
         org.junit.jupiter.api.Assertions.assertEquals(200, resp.getStatus());
 
-        ProcessorResult pr = (ProcessorResult) resp.getEntity();
-        Console.log("ut_resp_entity", pr);
+        String json = (String) resp.getEntity();
+        Console.log("ut_resp_entity", json);
 
-        org.junit.jupiter.api.Assertions.assertNotNull(pr);
-        org.junit.jupiter.api.Assertions.assertFalse(pr.isOk());
+        org.junit.jupiter.api.Assertions.assertNotNull(json);
+
+        com.google.gson.JsonObject jo = com.google.gson.JsonParser.parseString(json).getAsJsonObject();
+        org.junit.jupiter.api.Assertions.assertNotNull(jo);
+
+        org.junit.jupiter.api.Assertions.assertFalse(jo.get("ok").getAsBoolean());
+
+        com.google.gson.JsonObject why = jo.getAsJsonObject("why");
+        org.junit.jupiter.api.Assertions.assertNotNull(why);
         org.junit.jupiter.api.Assertions.assertEquals(
                 "DD-ORCH-VALIDATE-payload_value_base64",
-                pr.getWhy().reason()
+                why.get("reason").getAsString()
         );
 
-        // short-circuit before transport
+        // resource rejected before orchestrator/transport
         org.junit.jupiter.api.Assertions.assertEquals(0, fake.calls);
     }
 
     @Test
     void http_ingestion_payloadNotJsonObject_returns400() {
-
-        IngestionResource res = new IngestionResource();
-
         FakeHttpPoster fake = new FakeHttpPoster(200);
         res.setHttpPoster(fake);
 
@@ -189,12 +226,22 @@ public class IngestionResourceTest {
         Console.log("ut_resp_status", resp.getStatus());
         org.junit.jupiter.api.Assertions.assertEquals(400, resp.getStatus());
 
-        ProcessorResult pr = (ProcessorResult) resp.getEntity();
-        Console.log("ut_resp_entity", pr);
+        String json = (String) resp.getEntity();
+        Console.log("ut_resp_entity", json);
 
-        org.junit.jupiter.api.Assertions.assertNotNull(pr);
-        org.junit.jupiter.api.Assertions.assertFalse(pr.isOk());
-        org.junit.jupiter.api.Assertions.assertEquals("DD-INGEST-payload_invalid_json", pr.getWhy().reason());
+        org.junit.jupiter.api.Assertions.assertNotNull(json);
+
+        com.google.gson.JsonObject jo = com.google.gson.JsonParser.parseString(json).getAsJsonObject();
+        org.junit.jupiter.api.Assertions.assertNotNull(jo);
+
+        org.junit.jupiter.api.Assertions.assertFalse(jo.get("ok").getAsBoolean());
+
+        com.google.gson.JsonObject why = jo.getAsJsonObject("why");
+        org.junit.jupiter.api.Assertions.assertNotNull(why);
+        org.junit.jupiter.api.Assertions.assertEquals(
+                "DD-INGEST-payload_invalid_json",
+                why.get("reason").getAsString()
+        );
 
         // resource rejected before orchestrator/transport
         org.junit.jupiter.api.Assertions.assertEquals(0, fake.calls);

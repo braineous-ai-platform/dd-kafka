@@ -1,10 +1,11 @@
 package io.braineous.dd.consumer.processor;
 
-import ai.braineous.rag.prompt.cgo.api.GraphView;
-import ai.braineous.rag.prompt.models.cgo.graph.GraphSnapshot;
 import ai.braineous.rag.prompt.observe.Console;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import io.braineous.dd.consumer.service.DDEventOrchestrator;
 import io.braineous.dd.core.model.CaptureStore;
+import io.braineous.dd.ingestion.persistence.IngestionReceipt;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
@@ -30,15 +31,21 @@ public class Ingestion {
             return;
         }
 
+        JsonObject ingestion = JsonParser.parseString(ingestionJson).getAsJsonObject();
+        if(ingestion == null){
+            return;
+        }
+
+        JsonObject view = ingestion.get("view").getAsJsonObject();
+
+        IngestionReceipt receipt = this.orchestrator.orchestrate(ingestionJson);
+
+
         //for IT tests
         store.add(ingestionJson);
 
         Console.log("dd_event_ingestion", ingestionJson);
-
-        //orchestrate with CGO Graph
-        GraphView view = this.orchestrator.orchestrate(ingestionJson);
-
-        store.setSnapshot((GraphSnapshot) view);
+        store.setSnapshot(view);
     }
 
 }

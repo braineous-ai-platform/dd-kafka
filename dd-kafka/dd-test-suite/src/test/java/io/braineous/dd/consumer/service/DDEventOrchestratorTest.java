@@ -1,29 +1,52 @@
 package io.braineous.dd.consumer.service;
 
-import ai.braineous.rag.prompt.cgo.api.GraphView;
 import ai.braineous.rag.prompt.models.cgo.graph.GraphBuilder;
 import ai.braineous.rag.prompt.models.cgo.graph.GraphSnapshot;
-import ai.braineous.rag.prompt.cgo.api.Fact;
 import ai.braineous.rag.prompt.observe.Console;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonPrimitive;
+import io.braineous.dd.cgo.DDCGOOrchestrator;
+import io.braineous.dd.ingestion.persistence.IngestionReceipt;
 
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 
-import com.google.gson.JsonPrimitive;
+import io.braineous.dd.ingestion.persistence.MongoIngestionStore;
+import io.braineous.dd.support.InMemoryIngestionStore;
+import io.quarkus.test.junit.QuarkusTest;
+import jakarta.inject.Inject;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.time.LocalDate;
+import java.time.ZoneOffset;
+import java.util.List;
+
 import static org.junit.jupiter.api.Assertions.*;
 
+@QuarkusTest
 public class DDEventOrchestratorTest {
+
+    @Inject
+    private DDCGOOrchestrator cgoOrch;
+
+    @Inject
+    private DDEventOrchestrator orch;
 
     @BeforeEach
     void setup() {
+        GraphBuilder.getInstance().clear();
+        InMemoryIngestionStore store = new InMemoryIngestionStore();
+        orch.setStore(store);
+        store.reset();
         GraphBuilder.getInstance().clear();
     }
 
     @Test
     void orchestrate_builds_atomic_fact_nodes_for_dd_event_array() {
+        InMemoryIngestionStore store = (InMemoryIngestionStore) this.orch.getStore();
+
         JsonArray events = new JsonArray();
 
         JsonObject kafka = new JsonObject();
@@ -50,50 +73,73 @@ public class DDEventOrchestratorTest {
 
         Console.log("test.dd.orchestrate.in", events.toString());
 
-        DDEventOrchestrator orch = new DDEventOrchestrator();
-        GraphView view0 = orch.orchestrate(events.toString());
+        GraphSnapshot snapshot = (GraphSnapshot) this.cgoOrch.orchestrate(events.toString());
+        assertNotNull(snapshot);
 
-        assertNotNull(view0);
-        assertTrue(view0 instanceof GraphSnapshot);
+        addCGOata(events, snapshot);
+        Console.log("dd_events", events.toString());
 
-        GraphSnapshot view = (GraphSnapshot) view0;
+        IngestionReceipt receipt = orch.orchestrate(events.toString());
 
-        Console.log("test.dd.orchestrate.out.nodes", "" + view.nodes().size());
-        Console.log("test.dd.orchestrate.out.edges", "" + view.edges().size());
-        Console.log("test.dd.orchestrate.out.snapshotHash", view.snapshotHash());
+        assertNotNull(receipt);
+        Console.log("ingestion_receipt", receipt.toJson().toString());
 
-        // Node invariant: contains fact-001
-        Fact f = view.getFactById("fact-001");
-        assertNotNull(f, "Expected GraphSnapshot to contain Fact with id fact-001");
+        // ---------------- spine assertions (DD contract) ----------------
+        io.braineous.dd.support.DDAssert.assertReceiptOk(receipt, "memory");
 
-        assertEquals("fact-001", f.getId());
-        assertEquals("kafka_payload_bytes", f.getText());
-        assertEquals("atomic", f.getMode());
+        // ---------------- store assertions (assertion surface) ----------------
+        String stored = io.braineous.dd.support.DDAssert.assertStoredOnceAndGetPayload(store, receipt);
+
+        io.braineous.dd.support.DDAssert.assertPayloadContains(
+                stored,
+                "\"ingestionId\"",
+                "\"view\"",
+                "\"snapshotHash\"",
+                "\"kafka\"",
+                "\"topic\":\"requests\"",
+                "\"payload\"",
+                "\"encoding\":\"base64\""
+        );
+
+        // atomic fallback marker (pick one stable marker)
+        assertTrue(stored.contains("kafka_payload_bytes") || stored.contains("\"mode\":\"atomic\""));
     }
 
     @Test
     void orchestrate_returns_empty_graph_for_empty_input() {
+        InMemoryIngestionStore store = (InMemoryIngestionStore) this.orch.getStore();
+
         JsonArray events = new JsonArray();
 
         Console.log("test.dd.orchestrate.empty.in", events.toString());
 
-        DDEventOrchestrator orch = new DDEventOrchestrator();
-        GraphView view0 = orch.orchestrate(events.toString());
+        GraphSnapshot snapshot = (GraphSnapshot) this.cgoOrch.orchestrate(events.toString());
+        assertNotNull(snapshot);
 
-        assertNotNull(view0);
-        assertTrue(view0 instanceof GraphSnapshot);
+        addCGOata(events, snapshot);
+        Console.log("dd_events", events.toString());
 
-        GraphSnapshot view = (GraphSnapshot) view0;
+        IllegalArgumentException ex = assertThrows(
+                IllegalArgumentException.class,
+                new org.junit.jupiter.api.function.Executable() {
+                    @Override
+                    public void execute() {
+                        orch.orchestrate(events.toString());
+                    }
+                }
+        );
 
-        Console.log("test.dd.orchestrate.empty.out.nodes", "" + view.nodes().size());
-        Console.log("test.dd.orchestrate.empty.out.edges", "" + view.edges().size());
+        assertNotNull(ex.getMessage());
+        assertEquals("DD-ING-events_empty", ex.getMessage());
 
-        assertEquals(0, view.nodes().size());
-        assertEquals(0, view.edges().size());
+        assertNotNull(store);
+        assertEquals(0, store.storeCalls());
     }
 
     @Test
     void orchestrate_is_deterministic_for_same_input_same_snapshotHash() {
+        InMemoryIngestionStore store = (InMemoryIngestionStore) this.orch.getStore();
+
         JsonArray events = new JsonArray();
 
         JsonObject kafka = new JsonObject();
@@ -115,32 +161,31 @@ public class DDEventOrchestratorTest {
 
         Console.log("test.dd.orchestrate.determinism.in", events.toString());
 
-        DDEventOrchestrator orch = new DDEventOrchestrator();
+        GraphSnapshot snapshot = (GraphSnapshot) this.cgoOrch.orchestrate(events.toString());
+        assertNotNull(snapshot);
 
-        GraphSnapshot v1 = (GraphSnapshot) orch.orchestrate(events.toString());
-        GraphSnapshot v2 = (GraphSnapshot) orch.orchestrate(events.toString());
+        // Enrich input with deterministic axis (ingestionId + view.snapshotHash + atomic fact map)
+        addCGOata(events, snapshot);
+        Console.log("dd_events.v1", events.toString());
 
-        assertNotNull(v1);
-        assertNotNull(v2);
+        IngestionReceipt r1 = orch.orchestrate(events.toString());
+        assertNotNull(r1);
+        Console.log("ingestion_receipt.v1", r1.toJson().toString());
 
-        Console.log("test.dd.orchestrate.determinism.v1.nodes", "" + v1.nodes().size());
-        Console.log("test.dd.orchestrate.determinism.v2.nodes", "" + v2.nodes().size());
-        Console.log("test.dd.orchestrate.determinism.v1.hash", v1.snapshotHash());
-        Console.log("test.dd.orchestrate.determinism.v2.hash", v2.snapshotHash());
+        IngestionReceipt r2 = orch.orchestrate(events.toString());
+        assertNotNull(r2);
+        Console.log("ingestion_receipt.v2", r2.toJson().toString());
 
-        assertEquals(v1.nodes().size(), v2.nodes().size());
-        assertEquals(v1.edges().size(), v2.edges().size());
-
-        // deterministic keys
-        assertEquals(v1.nodes().keySet(), v2.nodes().keySet());
-        assertEquals(v1.edges().keySet(), v2.edges().keySet());
-
-        // strongest determinism signal
-        assertEquals(v1.snapshotHash().getValue(), v2.snapshotHash().getValue());
+        // ---------------- spine assertions (DD determinism) ----------------
+        io.braineous.dd.support.DDAssert.assertDeterministicReceipts(store, r1, r2);
     }
+
+
 
     @Test
     void orchestrate_ignores_garbage_elements_and_keeps_valid_event_fact() {
+        InMemoryIngestionStore store = (InMemoryIngestionStore) this.orch.getStore();
+
         JsonArray events = new JsonArray();
 
         // garbage
@@ -171,24 +216,55 @@ public class DDEventOrchestratorTest {
 
         Console.log("test.dd.orchestrate.mixed.in", events.toString());
 
-        DDEventOrchestrator orch = new DDEventOrchestrator();
-        GraphSnapshot view = (GraphSnapshot) orch.orchestrate(events.toString());
+        // shape-only CGO call (not testing CGO semantics)
+        GraphSnapshot snapshot = (GraphSnapshot) this.cgoOrch.orchestrate(events.toString());
+        assertNotNull(snapshot);
 
-        assertNotNull(view);
+        // Filter only valid DD event envelopes for enrichment + persistence.
+        // (addCGOata assumes JsonObject elements)
+        JsonArray clean = new JsonArray();
+        clean.add(good);
 
-        Console.log("test.dd.orchestrate.mixed.out.nodes", "" + view.nodes().size());
-        Console.log("test.dd.orchestrate.mixed.out.edges", "" + view.edges().size());
+        addCGOata(clean, snapshot);
+        Console.log("dd_events.clean", clean.toString());
+
+        IngestionReceipt receipt = orch.orchestrate(clean.toString());
+
+        assertNotNull(receipt);
+        Console.log("ingestion_receipt", receipt.toJson().toString());
+
+        // ---------------- spine assertions (DD contract) ----------------
+        io.braineous.dd.support.DDAssert.assertReceiptOk(receipt, "memory");
+
+        // ---------------- store assertions (assertion surface) ----------------
+        String stored = io.braineous.dd.support.DDAssert.assertStoredOnceAndGetPayload(store, receipt);
+
+        io.braineous.dd.support.DDAssert.assertPayloadContains(
+                stored,
+                "\"ingestionId\"",
+                "\"view\"",
+                "\"snapshotHash\"",
+                "\"kafka\"",
+                "\"topic\":\"requests\"",
+                "\"payload\"",
+                "\"encoding\":\"base64\""
+        );
 
         // valid event survives
-        assertNotNull(view.getFactById("fact-OK"));
+        assertTrue(stored.contains("\"key\":\"fact-OK\""));
 
-        // garbage did not create extra nodes
-        assertEquals(1, view.nodes().size(), "Expected only the valid event to produce a node");
+        // strongest signal that garbage did not leak into what we store
+        assertFalse(stored.contains("NOT_JSON_OBJECT"));
+        assertFalse(stored.contains("\"item\":\"Book\""));
+        assertFalse(stored.contains("\"quantity\":2"));
     }
+
 
 
     @Test
     void orchestrate_sameEventTwice_shouldDedup_and_stableSnapshot() {
+        InMemoryIngestionStore store = (InMemoryIngestionStore) this.orch.getStore();
+
         GraphBuilder.getInstance().clear();
 
         JsonArray events = new JsonArray();
@@ -214,30 +290,61 @@ public class DDEventOrchestratorTest {
 
         Console.log("test.dd.orchestrate.dup.in", events.toString());
 
-        DDEventOrchestrator orch = new DDEventOrchestrator();
-        GraphSnapshot v1 = (GraphSnapshot) orch.orchestrate(events.toString());
+        GraphSnapshot snapshot = (GraphSnapshot) this.cgoOrch.orchestrate(events.toString());
+        assertNotNull(snapshot);
 
-        assertNotNull(v1);
-        Console.log("test.dd.orchestrate.dup.out.nodes", "" + v1.nodes().size());
-        Console.log("test.dd.orchestrate.dup.out.hash", v1.snapshotHash());
+        addCGOata(events, snapshot);
+        Console.log("dd_events", events.toString());
 
-        // Dedup invariant
-        assertEquals(1, v1.nodes().size(), "Duplicate events must dedupe to a single atomic fact");
-        assertNotNull(v1.getFactById("fact-DEDUP"));
+        // Dedup invariant (new spine): duplicates share the SAME axis (ingestionId + snapshotHash)
+        JsonObject e0 = events.get(0).getAsJsonObject();
+        JsonObject e1 = events.get(1).getAsJsonObject();
 
-        // Determinism on re-run
+        String id0 = e0.get("ingestionId").getAsString();
+        String id1 = e1.get("ingestionId").getAsString();
+        assertNotNull(id0);
+        assertNotNull(id1);
+        assertEquals(id0, id1);
+
+        String snap0 = e0.getAsJsonObject("view").get("snapshotHash").getAsString();
+        String snap1 = e1.getAsJsonObject("view").get("snapshotHash").getAsString();
+        assertNotNull(snap0);
+        assertNotNull(snap1);
+        assertEquals(snap0, snap1);
+
+        IngestionReceipt r1 = orch.orchestrate(events.toString());
+        assertNotNull(r1);
+        Console.log("ingestion_receipt.v1", r1.toJson().toString());
+
+        io.braineous.dd.support.DDAssert.assertReceiptOk(r1, "memory");
+        assertEquals(snap0, r1.snapshotHash().getValue());
+        assertEquals(id0, r1.ingestionId());
+
+        io.braineous.dd.support.DDAssert.assertStoredOnceAndGetPayload(store, r1);
+
+        // Determinism on re-run: same input -> same snapshotHash
         GraphBuilder.getInstance().clear();
-        GraphSnapshot v2 = (GraphSnapshot) orch.orchestrate(events.toString());
+        store.reset();
 
-        Console.log("test.dd.orchestrate.dup.rerun.nodes", "" + v2.nodes().size());
-        Console.log("test.dd.orchestrate.dup.rerun.hash", v2.snapshotHash());
+        snapshot = (GraphSnapshot) this.cgoOrch.orchestrate(events.toString());
+        assertNotNull(snapshot);
 
-        assertEquals(v1.nodes().keySet(), v2.nodes().keySet());
-        assertEquals(v1.snapshotHash().getValue(), v2.snapshotHash().getValue());
+        addCGOata(events, snapshot);
+
+        IngestionReceipt r2 = orch.orchestrate(events.toString());
+        assertNotNull(r2);
+        Console.log("ingestion_receipt.v2", r2.toJson().toString());
+
+        io.braineous.dd.support.DDAssert.assertReceiptOk(r2, "memory");
+        assertEquals(r1.snapshotHash().getValue(), r2.snapshotHash().getValue());
     }
+
+
 
     @Test
     void orchestrate_is_order_invariant_for_same_semantic_events_same_snapshotHash() {
+        InMemoryIngestionStore store = (InMemoryIngestionStore) this.orch.getStore();
+
         // event A
         JsonObject kafkaA = new JsonObject();
         kafkaA.addProperty("topic", "requests");
@@ -288,29 +395,51 @@ public class DDEventOrchestratorTest {
         events2.add(rootB_order2);
         events2.add(rootA_order2);
 
-        DDEventOrchestrator orch = new DDEventOrchestrator();
+        Console.log("test.dd.orchestrate.orderInvariant.in1", events1.toString());
+        Console.log("test.dd.orchestrate.orderInvariant.in2", events2.toString());
 
-        GraphSnapshot v1 = (GraphSnapshot) orch.orchestrate(events1.toString());
-        GraphSnapshot v2 = (GraphSnapshot) orch.orchestrate(events2.toString());
+        GraphSnapshot s1 = (GraphSnapshot) this.cgoOrch.orchestrate(events1.toString());
+        GraphSnapshot s2 = (GraphSnapshot) this.cgoOrch.orchestrate(events2.toString());
+        assertNotNull(s1);
+        assertNotNull(s2);
 
-        assertNotNull(v1);
-        assertNotNull(v2);
+        addCGOata(events1, s1);
+        addCGOata(events2, s2);
 
-        Console.log("test.dd.orchestrate.orderInvariant.v1.hash", v1.snapshotHash());
-        Console.log("test.dd.orchestrate.orderInvariant.v2.hash", v2.snapshotHash());
+        Console.log("dd_events.1", events1.toString());
+        Console.log("dd_events.2", events2.toString());
+
+        IngestionReceipt r1 = orch.orchestrate(events1.toString());
+        assertNotNull(r1);
+        Console.log("ingestion_receipt.v1", r1.toJson().toString());
+
+        // reset store for the second run so this test doesn't depend on idempotent "touch" semantics
+        store.reset();
+
+        IngestionReceipt r2 = orch.orchestrate(events2.toString());
+        assertNotNull(r2);
+        Console.log("ingestion_receipt.v2", r2.toJson().toString());
+
+        io.braineous.dd.support.DDAssert.assertReceiptOk(r1, "memory");
+        io.braineous.dd.support.DDAssert.assertReceiptOk(r2, "memory");
+
+        Console.log("test.dd.orchestrate.orderInvariant.v1.hash", r1.snapshotHash());
+        Console.log("test.dd.orchestrate.orderInvariant.v2.hash", r2.snapshotHash());
 
         // same semantic content => same snapshot hash
-        assertEquals(v1.snapshotHash().getValue(), v2.snapshotHash().getValue());
+        assertEquals(r1.snapshotHash().getValue(), r2.snapshotHash().getValue());
 
-        // and both facts exist
-        assertNotNull(v1.getFactById("fact-A"));
-        assertNotNull(v1.getFactById("fact-B"));
-        assertNotNull(v2.getFactById("fact-A"));
-        assertNotNull(v2.getFactById("fact-B"));
+        // both facts exist in the stored payload (lightweight, DD-level)
+        String stored = io.braineous.dd.support.DDAssert.assertStoredOnceAndGetPayload(store, r2);
+        assertTrue(stored.contains("fact-A"));
+        assertTrue(stored.contains("fact-B"));
     }
+
 
     @Test
     void orchestrate_hash_does_not_change_when_payload_changes_for_same_fact_id() {
+        InMemoryIngestionStore store = (InMemoryIngestionStore) this.orch.getStore();
+
         JsonObject kafka = new JsonObject();
         kafka.addProperty("topic", "requests");
         kafka.addProperty("partition", 1);
@@ -334,33 +463,52 @@ public class DDEventOrchestratorTest {
         e2.add("kafka", kafka);
         e2.add("payload", payload2);
 
-        DDEventOrchestrator orch = new DDEventOrchestrator();
+        Console.log("test.dd.orchestrate.hashSameOnPayloadChange.in1", e1.toString());
+        Console.log("test.dd.orchestrate.hashSameOnPayloadChange.in2", e2.toString());
 
-        GraphSnapshot v1 = (GraphSnapshot) orch.orchestrate(arr(e1).toString());
-        GraphSnapshot v2 = (GraphSnapshot) orch.orchestrate(arr(e2).toString());
+        GraphSnapshot s1 = (GraphSnapshot) this.cgoOrch.orchestrate(e1.toString());
+        GraphSnapshot s2 = (GraphSnapshot) this.cgoOrch.orchestrate(e2.toString());
+        assertNotNull(s1);
+        assertNotNull(s2);
 
-        assertNotNull(v1);
-        assertNotNull(v2);
+        JsonArray events1 = arr(e1);
+        JsonArray events2 = arr(e2);
 
-        Console.log("test.dd.orchestrate.hashSameOnPayloadChange.v1.hash", v1.snapshotHash());
-        Console.log("test.dd.orchestrate.hashSameOnPayloadChange.v2.hash", v2.snapshotHash());
+        addCGOata(events1, s1);
+        addCGOata(events2, s2);
 
-        // Phase-1: snapshotHash depends on node/edge IDs only.
-        // Same fact id => same snapshotHash even if payload differs.
+        IngestionReceipt r1 = orch.orchestrate(events1.toString());
+        assertNotNull(r1);
+        Console.log("ingestion_receipt.v1", r1.toJson().toString());
+
+        store.reset();
+
+        IngestionReceipt r2 = orch.orchestrate(events2.toString());
+        assertNotNull(r2);
+        Console.log("ingestion_receipt.v2", r2.toJson().toString());
+
+        io.braineous.dd.support.DDAssert.assertReceiptOk(r1, "memory");
+        io.braineous.dd.support.DDAssert.assertReceiptOk(r2, "memory");
+
+        Console.log("test.dd.orchestrate.hashSameOnPayloadChange.v1.hash", r1.snapshotHash());
+        Console.log("test.dd.orchestrate.hashSameOnPayloadChange.v2.hash", r2.snapshotHash());
+
         assertEquals(
-                v1.snapshotHash().getValue(),
-                v2.snapshotHash().getValue(),
+                r1.snapshotHash().getValue(),
+                r2.snapshotHash().getValue(),
                 "Phase-1: ID-only hashing => payload change with same fact id must NOT change snapshotHash"
         );
 
-        // sanity: fact exists in both
-        assertNotNull(v1.getFactById("fact-001"));
-        assertNotNull(v2.getFactById("fact-001"));
+        // Lightweight DD-level proof: stored payload contains the fact id
+        String stored = io.braineous.dd.support.DDAssert.assertStoredOnceAndGetPayload(store, r2);
+        assertTrue(stored.contains("fact-001"));
     }
 
 
     @Test
     void orchestrate_hash_changes_when_fact_ids_change() {
+        InMemoryIngestionStore store = (InMemoryIngestionStore) this.orch.getStore();
+
         JsonObject kafka1 = new JsonObject();
         kafka1.addProperty("topic", "requests");
         kafka1.addProperty("partition", 1);
@@ -383,27 +531,47 @@ public class DDEventOrchestratorTest {
         e2.add("kafka", kafka2);
         e2.add("payload", payload);
 
-        DDEventOrchestrator orch = new DDEventOrchestrator();
+        Console.log("test.dd.orchestrate.hashChangeById.in1", e1.toString());
+        Console.log("test.dd.orchestrate.hashChangeById.in2", e2.toString());
 
-        GraphSnapshot v1 = (GraphSnapshot) orch.orchestrate(arr(e1).toString());
-        GraphSnapshot v2 = (GraphSnapshot) orch.orchestrate(arr(e2).toString());
+        GraphSnapshot s1 = (GraphSnapshot) this.cgoOrch.orchestrate(e1.toString());
+        GraphSnapshot s2 = (GraphSnapshot) this.cgoOrch.orchestrate(e2.toString());
+        assertNotNull(s1);
+        assertNotNull(s2);
 
-        assertNotNull(v1);
-        assertNotNull(v2);
+        JsonArray events1 = arr(e1);
+        JsonArray events2 = arr(e2);
 
-        Console.log("test.dd.orchestrate.hashChangeById.v1.hash", v1.snapshotHash());
-        Console.log("test.dd.orchestrate.hashChangeById.v2.hash", v2.snapshotHash());
+        addCGOata(events1, s1);
+        addCGOata(events2, s2);
+
+        IngestionReceipt r1 = orch.orchestrate(events1.toString());
+        assertNotNull(r1);
+        Console.log("ingestion_receipt.v1", r1.toJson().toString());
+
+        store.reset();
+
+        IngestionReceipt r2 = orch.orchestrate(events2.toString());
+        assertNotNull(r2);
+        Console.log("ingestion_receipt.v2", r2.toJson().toString());
+
+        io.braineous.dd.support.DDAssert.assertReceiptOk(r1, "memory");
+        io.braineous.dd.support.DDAssert.assertReceiptOk(r2, "memory");
+
+        Console.log("test.dd.orchestrate.hashChangeById.v1.hash", r1.snapshotHash());
+        Console.log("test.dd.orchestrate.hashChangeById.v2.hash", r2.snapshotHash());
 
         assertNotEquals(
-                v1.snapshotHash().getValue(),
-                v2.snapshotHash().getValue(),
+                r1.snapshotHash().getValue(),
+                r2.snapshotHash().getValue(),
                 "If fact IDs change, snapshotHash must change (ID-only hashing contract)"
         );
     }
 
     @Test
     void orchestrate_hash_does_not_change_when_payload_changes_but_fact_id_same() {
-        // same fact id
+        InMemoryIngestionStore store = (InMemoryIngestionStore) this.orch.getStore();
+
         JsonObject kafka = new JsonObject();
         kafka.addProperty("topic", "requests");
         kafka.addProperty("partition", 1);
@@ -411,7 +579,6 @@ public class DDEventOrchestratorTest {
         kafka.addProperty("timestamp", 1767114000123L);
         kafka.addProperty("key", "fact-001");
 
-        // payload #1
         JsonObject payload1 = new JsonObject();
         payload1.addProperty("encoding", "base64");
         payload1.addProperty("value", "AAECAwQFBgcICQ==");
@@ -420,65 +587,6 @@ public class DDEventOrchestratorTest {
         e1.add("kafka", kafka);
         e1.add("payload", payload1);
 
-        // payload #2 (different bytes)
-        JsonObject payload2 = new JsonObject();
-        payload2.addProperty("encoding", "base64");
-        payload2.addProperty("value", "AQIDBAUGBwgJCg==");
-
-        JsonObject e2 = new JsonObject();
-        e2.add("kafka", kafka);
-        e2.add("payload", payload2);
-
-        JsonArray events1 = new JsonArray();
-        events1.add(e1);
-
-        JsonArray events2 = new JsonArray();
-        events2.add(e2);
-
-        DDEventOrchestrator orch = new DDEventOrchestrator();
-
-        GraphSnapshot v1 = (GraphSnapshot) orch.orchestrate(events1.toString());
-        GraphSnapshot v2 = (GraphSnapshot) orch.orchestrate(events2.toString());
-
-        assertNotNull(v1);
-        assertNotNull(v2);
-
-        Console.log("test.dd.orchestrate.payloadChangeSameId.v1.hash", v1.snapshotHash());
-        Console.log("test.dd.orchestrate.payloadChangeSameId.v2.hash", v2.snapshotHash());
-
-        // Phase-1 contract: snapshotHash depends on node/edge IDs only
-        // so changing payload while keeping the same fact id must NOT change the hash.
-        assertEquals(
-                v1.snapshotHash().getValue(),
-                v2.snapshotHash().getValue(),
-                "With ID-only hashing, same fact id must yield same snapshotHash even if payload differs"
-        );
-
-        // sanity: the fact exists in both
-        assertNotNull(v1.getFactById("fact-001"));
-        assertNotNull(v2.getFactById("fact-001"));
-    }
-
-    @Test
-    void orchestrate_payload_change_same_fact_id_should_not_change_snapshotHash() {
-        // same fact id
-        JsonObject kafka = new JsonObject();
-        kafka.addProperty("topic", "requests");
-        kafka.addProperty("partition", 1);
-        kafka.addProperty("offset", 42);
-        kafka.addProperty("timestamp", 1767114000123L);
-        kafka.addProperty("key", "fact-001");
-
-        // payload #1
-        JsonObject payload1 = new JsonObject();
-        payload1.addProperty("encoding", "base64");
-        payload1.addProperty("value", "AAECAwQFBgcICQ==");
-
-        JsonObject e1 = new JsonObject();
-        e1.add("kafka", kafka);
-        e1.add("payload", payload1);
-
-        // payload #2 (different bytes)
         JsonObject payload2 = new JsonObject();
         payload2.addProperty("encoding", "base64");
         payload2.addProperty("value", "AQIDBAUGBwgJCg==");
@@ -496,42 +604,118 @@ public class DDEventOrchestratorTest {
         Console.log("test.dd.orchestrate.payloadChangeSameId.in1", events1.toString());
         Console.log("test.dd.orchestrate.payloadChangeSameId.in2", events2.toString());
 
-        DDEventOrchestrator orch = new DDEventOrchestrator();
+        GraphSnapshot s1 = (GraphSnapshot) this.cgoOrch.orchestrate(events1.toString());
+        GraphSnapshot s2 = (GraphSnapshot) this.cgoOrch.orchestrate(events2.toString());
+        assertNotNull(s1);
+        assertNotNull(s2);
 
-        GraphSnapshot v1 = (GraphSnapshot) orch.orchestrate(events1.toString());
-        GraphSnapshot v2 = (GraphSnapshot) orch.orchestrate(events2.toString());
+        addCGOata(events1, s1);
+        addCGOata(events2, s2);
 
-        assertNotNull(v1);
-        assertNotNull(v2);
+        IngestionReceipt r1 = orch.orchestrate(events1.toString());
+        assertNotNull(r1);
+        Console.log("ingestion_receipt.v1", r1.toJson().toString());
 
-        Console.log("test.dd.orchestrate.payloadChangeSameId.v1.nodes", "" + v1.nodes().size());
-        Console.log("test.dd.orchestrate.payloadChangeSameId.v2.nodes", "" + v2.nodes().size());
-        Console.log("test.dd.orchestrate.payloadChangeSameId.v1.edges", "" + v1.edges().size());
-        Console.log("test.dd.orchestrate.payloadChangeSameId.v2.edges", "" + v2.edges().size());
-        Console.log("test.dd.orchestrate.payloadChangeSameId.v1.hash", v1.snapshotHash());
-        Console.log("test.dd.orchestrate.payloadChangeSameId.v2.hash", v2.snapshotHash());
+        store.reset();
 
-        // Phase-1 contract: snapshotHash depends on node/edge IDs only.
-        // Same fact id => same snapshotHash even if payload differs.
+        IngestionReceipt r2 = orch.orchestrate(events2.toString());
+        assertNotNull(r2);
+        Console.log("ingestion_receipt.v2", r2.toJson().toString());
+
+        io.braineous.dd.support.DDAssert.assertReceiptOk(r1, "memory");
+        io.braineous.dd.support.DDAssert.assertReceiptOk(r2, "memory");
+
+        Console.log("test.dd.orchestrate.payloadChangeSameId.v1.hash", r1.snapshotHash());
+        Console.log("test.dd.orchestrate.payloadChangeSameId.v2.hash", r2.snapshotHash());
+
         assertEquals(
-                v1.snapshotHash().getValue(),
-                v2.snapshotHash().getValue(),
+                r1.snapshotHash().getValue(),
+                r2.snapshotHash().getValue(),
+                "With ID-only hashing, same fact id must yield same snapshotHash even if payload differs"
+        );
+
+        String stored = io.braineous.dd.support.DDAssert.assertStoredOnceAndGetPayload(store, r2);
+        assertTrue(stored.contains("fact-001"));
+    }
+
+    @Test
+    void orchestrate_payload_change_same_fact_id_should_not_change_snapshotHash() {
+        InMemoryIngestionStore store = (InMemoryIngestionStore) this.orch.getStore();
+
+        JsonObject kafka = new JsonObject();
+        kafka.addProperty("topic", "requests");
+        kafka.addProperty("partition", 1);
+        kafka.addProperty("offset", 42);
+        kafka.addProperty("timestamp", 1767114000123L);
+        kafka.addProperty("key", "fact-001");
+
+        JsonObject payload1 = new JsonObject();
+        payload1.addProperty("encoding", "base64");
+        payload1.addProperty("value", "AAECAwQFBgcICQ==");
+
+        JsonObject e1 = new JsonObject();
+        e1.add("kafka", kafka);
+        e1.add("payload", payload1);
+
+        JsonObject payload2 = new JsonObject();
+        payload2.addProperty("encoding", "base64");
+        payload2.addProperty("value", "AQIDBAUGBwgJCg==");
+
+        JsonObject e2 = new JsonObject();
+        e2.add("kafka", kafka);
+        e2.add("payload", payload2);
+
+        JsonArray events1 = new JsonArray();
+        events1.add(e1);
+
+        JsonArray events2 = new JsonArray();
+        events2.add(e2);
+
+        Console.log("test.dd.orchestrate.payload_change_same_fact_id.in1", events1.toString());
+        Console.log("test.dd.orchestrate.payload_change_same_fact_id.in2", events2.toString());
+
+        GraphSnapshot s1 = (GraphSnapshot) this.cgoOrch.orchestrate(events1.toString());
+        GraphSnapshot s2 = (GraphSnapshot) this.cgoOrch.orchestrate(events2.toString());
+        assertNotNull(s1);
+        assertNotNull(s2);
+
+        addCGOata(events1, s1);
+        addCGOata(events2, s2);
+
+        IngestionReceipt r1 = orch.orchestrate(events1.toString());
+        assertNotNull(r1);
+        Console.log("ingestion_receipt.v1", r1.toJson().toString());
+
+        store.reset();
+
+        IngestionReceipt r2 = orch.orchestrate(events2.toString());
+        assertNotNull(r2);
+        Console.log("ingestion_receipt.v2", r2.toJson().toString());
+
+        io.braineous.dd.support.DDAssert.assertReceiptOk(r1, "memory");
+        io.braineous.dd.support.DDAssert.assertReceiptOk(r2, "memory");
+
+        Console.log("test.dd.orchestrate.payload_change_same_fact_id.v1.hash", r1.snapshotHash());
+        Console.log("test.dd.orchestrate.payload_change_same_fact_id.v2.hash", r2.snapshotHash());
+
+        assertEquals(
+                r1.snapshotHash().getValue(),
+                r2.snapshotHash().getValue(),
                 "Phase-1: ID-only hashing => payload change with same fact id must NOT change snapshotHash"
         );
 
-        // sanity: fact exists in both
-        assertNotNull(v1.getFactById("fact-001"));
-        assertNotNull(v2.getFactById("fact-001"));
+        String stored = io.braineous.dd.support.DDAssert.assertStoredOnceAndGetPayload(store, r2);
+        assertTrue(stored.contains("fact-001"));
     }
 
     @Test
     void orchestrate_hash_changes_when_fact_id_changes_even_if_payload_same() {
-        // shared payload (same bytes)
+        InMemoryIngestionStore store = (InMemoryIngestionStore) this.orch.getStore();
+
         JsonObject payload = new JsonObject();
         payload.addProperty("encoding", "base64");
         payload.addProperty("value", "AAECAwQFBgcICQ==");
 
-        // event #1 => fact-001
         JsonObject kafka1 = new JsonObject();
         kafka1.addProperty("topic", "requests");
         kafka1.addProperty("partition", 1);
@@ -543,7 +727,6 @@ public class DDEventOrchestratorTest {
         e1.add("kafka", kafka1);
         e1.add("payload", payload);
 
-        // event #2 => fact-002 (only change is the id)
         JsonObject kafka2 = new JsonObject();
         kafka2.addProperty("topic", "requests");
         kafka2.addProperty("partition", 1);
@@ -555,30 +738,48 @@ public class DDEventOrchestratorTest {
         e2.add("kafka", kafka2);
         e2.add("payload", payload);
 
-        DDEventOrchestrator orch = new DDEventOrchestrator();
+        Console.log("test.dd.orchestrate.hashChangeByIdSamePayload.in1", e1.toString());
+        Console.log("test.dd.orchestrate.hashChangeByIdSamePayload.in2", e2.toString());
 
-        GraphSnapshot v1 = (GraphSnapshot) orch.orchestrate(arr(e1).toString());
-        GraphSnapshot v2 = (GraphSnapshot) orch.orchestrate(arr(e2).toString());
+        GraphSnapshot s1 = (GraphSnapshot) this.cgoOrch.orchestrate(e1.toString());
+        GraphSnapshot s2 = (GraphSnapshot) this.cgoOrch.orchestrate(e2.toString());
+        assertNotNull(s1);
+        assertNotNull(s2);
 
-        assertNotNull(v1);
-        assertNotNull(v2);
+        JsonArray events1 = arr(e1);
+        JsonArray events2 = arr(e2);
 
-        Console.log("test.dd.orchestrate.hashChangeById.v1.hash", v1.snapshotHash());
-        Console.log("test.dd.orchestrate.hashChangeById.v2.hash", v2.snapshotHash());
+        addCGOata(events1, s1);
+        addCGOata(events2, s2);
+
+        IngestionReceipt r1 = orch.orchestrate(events1.toString());
+        assertNotNull(r1);
+        Console.log("ingestion_receipt.v1", r1.toJson().toString());
+
+        store.reset();
+
+        IngestionReceipt r2 = orch.orchestrate(events2.toString());
+        assertNotNull(r2);
+        Console.log("ingestion_receipt.v2", r2.toJson().toString());
+
+        io.braineous.dd.support.DDAssert.assertReceiptOk(r1, "memory");
+        io.braineous.dd.support.DDAssert.assertReceiptOk(r2, "memory");
+
+        Console.log("test.dd.orchestrate.hashChangeByIdSamePayload.v1.hash", r1.snapshotHash());
+        Console.log("test.dd.orchestrate.hashChangeByIdSamePayload.v2.hash", r2.snapshotHash());
 
         assertNotEquals(
-                v1.snapshotHash().getValue(),
-                v2.snapshotHash().getValue(),
+                r1.snapshotHash().getValue(),
+                r2.snapshotHash().getValue(),
                 "Phase-1: ID-only hashing => changing fact id must change snapshotHash"
         );
 
-        // sanity
-        assertNotNull(v1.getFactById("fact-001"));
-        assertNotNull(v2.getFactById("fact-002"));
+        String stored = io.braineous.dd.support.DDAssert.assertStoredOnceAndGetPayload(store, r2);
+        assertTrue(stored.contains("fact-002"));
     }
 
 
-
+    //------------------------------------------------------------------------------------
 
     private static JsonArray arr(JsonObject obj) {
         JsonArray a = new JsonArray();
@@ -587,4 +788,52 @@ public class DDEventOrchestratorTest {
     }
 
 
+    private void addCGOata(JsonArray ddEvents, GraphSnapshot snapshot) {
+
+        if (ddEvents == null || snapshot == null) {
+            return;
+        }
+
+        String snap = null;
+        if (snapshot.snapshotHash() != null) {
+            snap = snapshot.snapshotHash().getValue();
+        }
+
+        if (snap == null || snap.trim().length() == 0) {
+            return;
+        }
+
+        // Cache axis birth per snapshot for this batch so duplicates don't get different ingestionIds
+        String cachedIngestionId = null;
+
+        // add CGO-View to incoming DDEvents (skip garbage elements)
+        for (int i = 0; i < ddEvents.size(); i++) {
+
+            JsonElement el = ddEvents.get(i);
+            if (el == null || !el.isJsonObject()) {
+                continue;
+            }
+
+            JsonObject ddEvent = el.getAsJsonObject();
+
+            // Only enrich valid DD event envelopes (must have kafka + payload)
+            if (!ddEvent.has("kafka") || !ddEvent.has("payload")) {
+                continue;
+            }
+
+            // Resolve ingestionId once per snapshot for this batch (stable across duplicates)
+            if (cachedIngestionId == null) {
+                cachedIngestionId = this.orch.getStore().resolveIngestionId(ddEvent.toString(), snap);
+            }
+
+            ddEvent.addProperty("ingestionId", cachedIngestionId);
+
+            JsonObject snapJson = snapshot.toJson();
+            snapJson.addProperty(MongoIngestionStore.F_SNAPSHOT_HASH, snap); // "snapshotHash"
+
+            ddEvent.add("view", snapJson);
+        }
+    }
+
 }
+

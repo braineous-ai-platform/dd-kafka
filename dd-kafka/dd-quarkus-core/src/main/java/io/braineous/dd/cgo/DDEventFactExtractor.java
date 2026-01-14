@@ -1,4 +1,4 @@
-package io.braineous.dd.consumer.service;
+package io.braineous.dd.cgo;
 
 import ai.braineous.rag.prompt.cgo.api.Fact;
 import ai.braineous.rag.prompt.cgo.api.FactExtractor;

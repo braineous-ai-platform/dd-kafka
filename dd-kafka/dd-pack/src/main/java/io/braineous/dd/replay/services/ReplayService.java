@@ -17,6 +17,9 @@ public class ReplayService {
     @Inject
     private ReplayStore store;
 
+    @Inject
+    private ProcessorOrchestrator processorOrchestrator;
+
     //To facilate unit tests with an in-memory store. System store will be based on MongoDB
     public void setStore(ReplayStore store){
         this.store = store;
@@ -90,7 +93,8 @@ public class ReplayService {
     }
 
     void orchestrate(JsonObject payloadJson){
-        ProcessorOrchestrator.getInstance().orchestrate(payloadJson);
+
+        this.processorOrchestrator.orchestrate(payloadJson);
     }
 
 }

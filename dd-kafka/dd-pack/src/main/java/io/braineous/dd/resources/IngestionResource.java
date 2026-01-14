@@ -11,6 +11,7 @@ import io.braineous.dd.processor.ProcessorOrchestrator;
 import io.braineous.dd.processor.ProcessorResult;
 import io.braineous.dd.processor.client.DDIngestionHttpPoster;
 import io.braineous.dd.replay.model.IngestionRequest;
+import jakarta.inject.Inject;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.POST;
 import jakarta.ws.rs.Path;
@@ -22,12 +23,8 @@ import jakarta.ws.rs.core.MediaType;
 @Produces(MediaType.APPLICATION_JSON)
 public class IngestionResource {
 
+    @Inject
     private ProcessorOrchestrator orch;
-
-    public IngestionResource() {
-        this.orch = ProcessorOrchestrator.getInstance();
-        this.orch.setHttpPoster(new DDIngestionHttpPoster());
-    }
 
     //test seam
     void setHttpPoster(HttpPoster poster){
@@ -47,7 +44,11 @@ public class IngestionResource {
             Console.log("ingestion_400", "request_null");
             return jakarta.ws.rs.core.Response
                     .status(400)
-                    .entity(ProcessorResult.fail(new Why("DD-INGEST-request_null", "request cannot be null")))
+                    .entity(
+                            ProcessorResult.fail(
+                                    new Why("DD-INGEST-request_null",
+                                            "request cannot be null")).toJsonString()
+                    )
                     .build();
         }
 
@@ -56,7 +57,10 @@ public class IngestionResource {
             Console.log("ingestion_400", "payload_blank");
             return jakarta.ws.rs.core.Response
                     .status(400)
-                    .entity(ProcessorResult.fail(new Why("DD-INGEST-payload_blank", "payload cannot be blank")))
+                    .entity(
+                            ProcessorResult.fail(new Why("DD-INGEST-payload_blank",
+                                    "payload cannot be blank")).toJsonString()
+                    )
                     .build();
         }
 
@@ -68,7 +72,10 @@ public class IngestionResource {
             Console.log("ingestion_400", "payload_invalid_json :: " + e.getClass().getSimpleName());
             return jakarta.ws.rs.core.Response
                     .status(400)
-                    .entity(ProcessorResult.fail(new Why("DD-INGEST-payload_invalid_json", "payload must be a JSON object")))
+                    .entity(ProcessorResult.fail(
+                            new Why("DD-INGEST-payload_invalid_json", "payload must be a JSON object"))
+                            .toJsonString()
+                    )
                     .build();
         }
 
@@ -76,17 +83,12 @@ public class IngestionResource {
         ProcessorResult result = this.orch.orchestrate(payloadJson);
         Console.log("ingestion_200", result);
 
-        // serialize with Gson so Gson JsonObject is handled correctly
-                String json = new Gson().toJson(result);
-
-                return jakarta.ws.rs.core.Response
-                        .ok(json, MediaType.APPLICATION_JSON)
-                        .build();
+        return jakarta.ws.rs.core.Response
+                .status(200)
+                .entity(result.toJsonString())
+                .build();
 
     }
-
-
-    //-------Validators --------------------------
 }
 
 

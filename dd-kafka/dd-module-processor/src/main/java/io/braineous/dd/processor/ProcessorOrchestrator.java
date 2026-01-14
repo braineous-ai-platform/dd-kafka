@@ -1,25 +1,34 @@
 package io.braineous.dd.processor;
 
 
+import ai.braineous.rag.prompt.cgo.api.GraphView;
+import ai.braineous.rag.prompt.models.cgo.graph.GraphSnapshot;
+import ai.braineous.rag.prompt.models.cgo.graph.SnapshotHash;
 import com.google.gson.JsonObject;
 
+import io.braineous.dd.cgo.DDCGOOrchestrator;
+import io.braineous.dd.ingestion.persistence.MongoIngestionStore;
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+import io.braineous.dd.ingestion.persistence.IngestionStore;
 import io.braineous.dd.core.model.Why;
 import io.braineous.dd.core.processor.HttpPoster;
 import io.braineous.dd.core.processor.JsonSerializer;
 import io.braineous.dd.processor.client.DDProducerClient;
 import io.braineous.dd.core.processor.GsonJsonSerializer;
 
+@ApplicationScoped
 public class ProcessorOrchestrator {
-    private static final ProcessorOrchestrator orchestrator = new ProcessorOrchestrator();
 
+    @Inject
     private HttpPoster httpPoster;
 
-    private ProcessorOrchestrator() {
-    }
+    @Inject
+    private IngestionStore ingestionStore;
 
-    public static ProcessorOrchestrator getInstance(){
-        return orchestrator;
-    }
+    @Inject
+    private DDCGOOrchestrator cgoOrchestrator;
+
 
     public void setHttpPoster(HttpPoster httpPoster) {
         this.httpPoster = httpPoster;
@@ -31,16 +40,50 @@ public class ProcessorOrchestrator {
             return validation;
         }
 
+        //orchestrate with CGO Graph
+        String ddEventStr = ddEventJson.toString();
+        GraphView view = this.cgoOrchestrator.orchestrate(ddEventStr);
+        //Add view details
+        GraphSnapshot snapshot = (GraphSnapshot)view;
+        if(snapshot == null ||
+                snapshot.snapshotHash() == null ||
+                snapshot.snapshotHash().getValue() == null ||
+                snapshot.snapshotHash().getValue().trim().length() == 0
+        ){
+            //TODO: send_to_dlq_system
+            return ProcessorResult.fail(ddEventJson,
+                    new Why("DD-ORCH-INGESTION_ID-cgo", "system_view_is_null"));
+        }
+
         // Direction: choose one transport later (Kafka emit OR REST call).
         // For now route through a client stub so wiring stays stable.
         String ingestionEndpoint = "/api/ingestion";
         JsonSerializer serializer = new GsonJsonSerializer();
-        return DDProducerClient.getInstance().invoke(
+
+        String ingestionId = this.nextIngestionId(ddEventStr, view);
+        if(ingestionId == null){
+            //TODO: send_to_dlq_system
+            return ProcessorResult.fail(ddEventJson,
+                    new Why("DD-ORCH-INGESTION_ID-cgo", "system_ingestion_id_is_null"));
+        }
+
+        ddEventJson.addProperty("ingestionId", ingestionId);
+
+        JsonObject viewJson = snapshot.toJson();
+        String snap = snapshot.snapshotHash().getValue();
+        viewJson.addProperty(MongoIngestionStore.F_SNAPSHOT_HASH, snap);
+        ddEventJson.add("view", viewJson);
+
+
+
+        ProcessorResult result = DDProducerClient.getInstance().invoke(
                 this.httpPoster,
                 serializer,
                 ingestionEndpoint,
                 ddEventJson,
                 ddEventJson);
+        result.setIngestionId(ingestionId);
+        return result;
     }
 
 
@@ -184,6 +227,29 @@ public class ProcessorOrchestrator {
                 && !obj.get(key).isJsonNull()
                 && obj.get(key).isJsonPrimitive()
                 && obj.get(key).getAsJsonPrimitive().isNumber();
+    }
+
+    String nextIngestionId(String ddEventStr, GraphView view) {
+        if(view == null){
+            return null;
+        }
+
+        GraphSnapshot snapshot = (GraphSnapshot) view;
+        if(snapshot == null){
+            return null;
+        }
+
+        SnapshotHash snapshotHash = ((GraphSnapshot) view).snapshotHash();
+        if(snapshotHash == null){
+            return null;
+        }
+
+        String snap = snapshotHash.getValue();
+        if(snap == null || snap.trim().length() == 0){
+            return null;
+        }
+
+        return this.ingestionStore.resolveIngestionId(ddEventStr, snap);
     }
 
 }

@@ -3,9 +3,8 @@ package io.braineous.dd.replay;
 import ai.braineous.cgo.config.ConfigService;
 
 
-import io.braineous.dd.consumer.service.persistence.MongoIngestionStore;
+import io.braineous.dd.ingestion.persistence.MongoIngestionStore;
 import io.braineous.dd.core.config.DDConfigService;
-import jakarta.ws.rs.core.Response;
 
 
 @io.quarkus.test.junit.QuarkusTest

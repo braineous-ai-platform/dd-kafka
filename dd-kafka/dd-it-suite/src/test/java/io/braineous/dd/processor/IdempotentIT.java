@@ -7,6 +7,8 @@ import io.braineous.dd.core.model.DDEvent;
 import io.braineous.dd.core.processor.HttpPoster;
 import io.braineous.dd.processor.client.DDIngestionHttpPoster;
 import io.braineous.dd.core.processor.GsonJsonSerializer;
+import io.quarkus.test.junit.QuarkusTest;
+import jakarta.inject.Inject;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
@@ -19,10 +21,14 @@ import java.net.http.HttpResponse;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+@QuarkusTest
 public class IdempotentIT {
 
     private static final String CONSUMER_BASE = System.getProperty("dd.consumer.baseUrl", "http://localhost:8082");
     private static final HttpClient http = HttpClient.newHttpClient();
+
+    @Inject
+    private ProcessorOrchestrator orch;
 
     @BeforeEach
     public void setUp() throws Exception{
@@ -56,7 +62,6 @@ public class IdempotentIT {
         HttpPoster httpPoster = new DDIngestionHttpPoster();
 
         // orchestrate
-        ProcessorOrchestrator orch = ProcessorOrchestrator.getInstance(); // or getInstance()/setter — use your wiring
         orch.setHttpPoster(httpPoster);
         ProcessorResult result = orch.orchestrate(ddEventJson);
 
@@ -104,7 +109,6 @@ public class IdempotentIT {
         HttpPoster httpPoster = new DDIngestionHttpPoster();
 
         // orchestrate
-        ProcessorOrchestrator orch = ProcessorOrchestrator.getInstance();
         orch.setHttpPoster(httpPoster);
         ProcessorResult result = orch.orchestrate(ddEventJson);
 
@@ -149,7 +153,6 @@ public class IdempotentIT {
         HttpPoster httpPoster = new DDIngestionHttpPoster();
 
         // orchestrate
-        ProcessorOrchestrator orch = ProcessorOrchestrator.getInstance();
         orch.setHttpPoster(httpPoster);
         ProcessorResult result = orch.orchestrate(ddEventJson);
 
@@ -202,7 +205,6 @@ public class IdempotentIT {
         HttpPoster httpPoster = new DDIngestionHttpPoster();
 
         // orchestrate
-        ProcessorOrchestrator orch = ProcessorOrchestrator.getInstance();
         orch.setHttpPoster(httpPoster);
         ProcessorResult result = orch.orchestrate(ddEventJson);
 
@@ -251,7 +253,6 @@ public class IdempotentIT {
         HttpPoster httpPoster = new DDIngestionHttpPoster();
 
         // orchestrate
-        ProcessorOrchestrator orch = ProcessorOrchestrator.getInstance();
         orch.setHttpPoster(httpPoster);
         ProcessorResult result = orch.orchestrate(ddEventJson);
 
@@ -295,7 +296,6 @@ public class IdempotentIT {
         HttpPoster httpPoster = new DDIngestionHttpPoster();
 
         // orchestrate
-        ProcessorOrchestrator orch = ProcessorOrchestrator.getInstance();
         orch.setHttpPoster(httpPoster);
         ProcessorResult result = orch.orchestrate(ddEventJson);
 
@@ -339,7 +339,6 @@ public class IdempotentIT {
         HttpPoster httpPoster = new DDIngestionHttpPoster();
 
         // orchestrate
-        ProcessorOrchestrator orch = ProcessorOrchestrator.getInstance();
         orch.setHttpPoster(httpPoster);
         ProcessorResult result = orch.orchestrate(ddEventJson);
 
@@ -383,7 +382,6 @@ public class IdempotentIT {
         HttpPoster httpPoster = new DDIngestionHttpPoster();
 
         // orchestrate
-        ProcessorOrchestrator orch = ProcessorOrchestrator.getInstance();
         orch.setHttpPoster(httpPoster);
         ProcessorResult result = orch.orchestrate(ddEventJson);
 
@@ -423,7 +421,7 @@ public class IdempotentIT {
         // --- FORCE RESET poster (external, test-only) ---
         Field f = ProcessorOrchestrator.class.getDeclaredField("httpPoster");
         f.setAccessible(true);
-        f.set(ProcessorOrchestrator.getInstance(), null);
+        f.set(orch, null);
 
         // transport failure poster
         HttpPoster throwingPoster = (url, jsonBody) -> {
@@ -432,7 +430,6 @@ public class IdempotentIT {
         };
 
         // orchestrate
-        ProcessorOrchestrator orch = ProcessorOrchestrator.getInstance();
         orch.setHttpPoster(throwingPoster);
 
         ProcessorResult result = orch.orchestrate(ddEventJson);
@@ -480,7 +477,6 @@ public class IdempotentIT {
         HttpPoster httpPoster = new DDIngestionHttpPoster();
 
         // orchestrate (send twice)
-        ProcessorOrchestrator orch = ProcessorOrchestrator.getInstance();
         orch.setHttpPoster(httpPoster);
 
         ProcessorResult r1 = orch.orchestrate(ddEventJson);
@@ -534,7 +530,6 @@ public class IdempotentIT {
         HttpPoster httpPoster = new DDIngestionHttpPoster();
 
         // orchestrate first time
-        ProcessorOrchestrator orch = ProcessorOrchestrator.getInstance();
         orch.setHttpPoster(httpPoster);
 
         ProcessorResult r1 = orch.orchestrate(ddEventJson);
@@ -593,7 +588,6 @@ public class IdempotentIT {
         HttpPoster httpPoster = new DDIngestionHttpPoster();
 
         // orchestrate twice
-        ProcessorOrchestrator orch = ProcessorOrchestrator.getInstance();
         orch.setHttpPoster(httpPoster);
 
         ProcessorResult r1 = orch.orchestrate(ddEventJson);
@@ -659,10 +653,10 @@ public class IdempotentIT {
         return Integer.parseInt(resp.body().trim());
     }
 
-    private static void resetOrchestratorPoster() throws Exception {
+    private void resetOrchestratorPoster() throws Exception {
         Field f = ProcessorOrchestrator.class.getDeclaredField("httpPoster");
         f.setAccessible(true);
-        f.set(ProcessorOrchestrator.getInstance(), null);
+        f.set(orch, null);
     }
 
     private String fetchGraphCanonicalSha256() throws Exception {

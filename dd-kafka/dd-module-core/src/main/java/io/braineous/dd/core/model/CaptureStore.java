@@ -2,6 +2,7 @@ package io.braineous.dd.core.model;
 
 import ai.braineous.rag.prompt.models.cgo.graph.GraphSnapshot;
 import ai.braineous.rag.prompt.observe.Console;
+import com.google.gson.JsonObject;
 
 public class CaptureStore {
     private static final CaptureStore store = new CaptureStore();
@@ -16,6 +17,17 @@ public class CaptureStore {
 
     private Object dlqResult;
 
+    private JsonObject snapshot;
+
+    private String ddEvent;
+
+    //----------------------------------------------------------------------------
+
+
+    public JsonObject getSnapshot() {
+        return snapshot;
+    }
+
     public Object getDlqResult() {
         return dlqResult;
     }
@@ -24,16 +36,21 @@ public class CaptureStore {
         this.dlqResult = dlqResult;
     }
 
-    private GraphSnapshot snapshot;
-
-    public GraphSnapshot getSnapshot() {
-        return snapshot;
-    }
-
-    public void setSnapshot(GraphSnapshot snapshot) {
-        Console.log("DD_DEBUG_GRAPH", snapshot.toJson().toString());
+    public void setSnapshot(JsonObject snapshot) {
+        Console.log("DD_DEBUG_GRAPH", snapshot.toString());
         this.snapshot = snapshot;
     }
+
+    public String getDdEvent() {
+        return ddEvent;
+    }
+
+    public void setDdEvent(String ddEvent) {
+        this.ddEvent = ddEvent;
+    }
+
+    //----------------------------------------------
+
 
     //ingestion_queue
     public void add(String s) { q.add(s); }
@@ -45,6 +62,7 @@ public class CaptureStore {
         dq.clear();
         this.snapshot = null;
         this.dlqResult = null;
+        this.ddEvent = null;
     }
 
     //ddl_system_queue

@@ -7,6 +7,7 @@ import io.braineous.dd.replay.persistence.MongoReplayStore;
 import io.quarkus.test.junit.QuarkusTest;
 import jakarta.inject.Inject;
 import org.bson.Document;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -26,6 +27,7 @@ public class MongoReplayStoreIT {
     MongoClient mongoClient;
 
     @BeforeEach
+    @AfterEach
     void reset() {
         mongoClient.getDatabase(MongoReplayStore.DB)
                 .getCollection(MongoReplayStore.INGESTION_COL)
@@ -171,37 +173,38 @@ public class MongoReplayStoreIT {
         assertNotNull(e.timestamp());
     }
 
+
     @Test
     void findByTimeObjectKey_returnsEvents_matchingKey_sortedByCreatedAt() {
-        var col = mongoClient.getDatabase(MongoReplayStore.DB).getCollection(MongoReplayStore.INGESTION_COL);
+        var col = mongoClient
+                .getDatabase(MongoReplayStore.DB)
+                .getCollection(MongoReplayStore.INGESTION_COL);
 
         Instant t1 = Instant.parse("2026-01-07T10:00:01Z");
         Instant t2 = Instant.parse("2026-01-07T10:00:02Z");
         Instant t3 = Instant.parse("2026-01-07T10:00:03Z");
 
+        // non-matching key
         col.insertOne(new Document()
-                .append("ingestionId", "ID-x")
+                .append("ingestionId", "KEY-B")
                 .append("payload", "Px")
-                .append("createdAt", Date.from(t2))
-                .append("objectKey", "KEY-B"));
+                .append("createdAt", Date.from(t2)));
 
+        // matching key = ingestionId (current contract)
         col.insertOne(new Document()
-                .append("ingestionId", "ID-1")
+                .append("ingestionId", "KEY-A")
                 .append("payload", "P1")
-                .append("createdAt", Date.from(t2))
-                .append("objectKey", "KEY-A"));
+                .append("createdAt", Date.from(t2)));
 
         col.insertOne(new Document()
-                .append("ingestionId", "ID-0")
+                .append("ingestionId", "KEY-A")
                 .append("payload", "P0")
-                .append("createdAt", Date.from(t1))
-                .append("objectKey", "KEY-A"));
+                .append("createdAt", Date.from(t1)));
 
         col.insertOne(new Document()
-                .append("ingestionId", "ID-2")
+                .append("ingestionId", "KEY-A")
                 .append("payload", "P2")
-                .append("createdAt", Date.from(t3))
-                .append("objectKey", "KEY-A"));
+                .append("createdAt", Date.from(t3)));
 
         ReplayRequest req = new ReplayRequest();
         set(req, "objectKey", "KEY-A");
@@ -213,13 +216,19 @@ public class MongoReplayStoreIT {
         assertNotNull(events);
         assertEquals(3, events.size());
 
-        assertEquals("ID-0", events.get(0).id());
+        assertEquals("KEY-A", events.get(0).id());
         assertEquals("P0", events.get(0).payload());
         assertEquals(t1, events.get(0).timestamp());
 
+        assertEquals("KEY-A", events.get(1).id());
+        assertEquals("P1", events.get(1).payload());
         assertEquals(t2, events.get(1).timestamp());
+
+        assertEquals("KEY-A", events.get(2).id());
+        assertEquals("P2", events.get(2).payload());
         assertEquals(t3, events.get(2).timestamp());
     }
+
 
     @Test
     void findByTimeObjectKey_nullOrBlankKey_returnsEmpty() {
@@ -245,18 +254,20 @@ public class MongoReplayStoreIT {
 
     @Test
     void findByTimeObjectKey_trimsKey_andMatches() {
-        var col = mongoClient.getDatabase(MongoReplayStore.DB).getCollection(MongoReplayStore.INGESTION_COL);
+        var col = mongoClient
+                .getDatabase(MongoReplayStore.DB)
+                .getCollection(MongoReplayStore.INGESTION_COL);
 
         Instant t1 = Instant.parse("2026-01-07T11:00:01Z");
 
+        // current contract: objectKey == ingestionId
         col.insertOne(new Document()
-                .append("ingestionId", "ID-1")
+                .append("ingestionId", "KEY-A")
                 .append("payload", "P1")
-                .append("createdAt", Date.from(t1))
-                .append("objectKey", "KEY-A"));
+                .append("createdAt", Date.from(t1)));
 
         ReplayRequest req = new ReplayRequest();
-        set(req, "objectKey", "   KEY-A   ");
+        set(req, "objectKey", "   KEY-A   "); // trimming must happen
         set(req, "stream", "ingestion");
         set(req, "reason", "it-test");
 
@@ -264,20 +275,26 @@ public class MongoReplayStoreIT {
 
         assertNotNull(events);
         assertEquals(1, events.size());
-        assertEquals("ID-1", events.get(0).id());
+
+        ReplayEvent e = events.get(0);
+        assertEquals("KEY-A", e.id());
+        assertEquals("P1", e.payload());
+        assertEquals(t1, e.timestamp());
     }
 
 
     @Test
     void findByTimeObjectKey_missingFields_doesNotCrash_andMapsNulls() {
-        var col = mongoClient.getDatabase(MongoReplayStore.DB).getCollection(MongoReplayStore.INGESTION_COL);
+        var col = mongoClient
+                .getDatabase(MongoReplayStore.DB)
+                .getCollection(MongoReplayStore.INGESTION_COL);
 
         Instant t1 = Instant.parse("2026-01-07T12:00:01Z");
 
-        // missing ingestionId/payload; still matches objectKey
+        // missing payload; still matches objectKey (objectKey == ingestionId contract)
         col.insertOne(new Document()
                 .append("createdAt", Date.from(t1))
-                .append("objectKey", "KEY-A"));
+                .append("ingestionId", "KEY-A"));
 
         ReplayRequest req = new ReplayRequest();
         set(req, "objectKey", "KEY-A");
@@ -290,10 +307,12 @@ public class MongoReplayStoreIT {
         assertEquals(1, events.size());
 
         ReplayEvent e = events.get(0);
-        assertNull(e.id());
+        assertNotNull(e.id());
+        assertEquals("KEY-A", e.id());
         assertNull(e.payload());
         assertNotNull(e.timestamp());
     }
+
 
     @Test
     void findByDomainDlqId_returnsEvents_matchingDlqId_sortedByCreatedAt() {

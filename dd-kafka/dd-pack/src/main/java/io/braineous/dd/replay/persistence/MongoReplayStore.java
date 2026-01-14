@@ -105,7 +105,7 @@ public class MongoReplayStore implements ReplayStore{
         if (key == null || key.trim().isEmpty()) return List.of();
 
         try {
-            var filter = com.mongodb.client.model.Filters.eq("objectKey", key.trim());
+            var filter = com.mongodb.client.model.Filters.eq("ingestionId", key.trim());
             var sort   = com.mongodb.client.model.Sorts.ascending("createdAt", "_id");
 
             java.util.ArrayList<ReplayEvent> out = new java.util.ArrayList<>();
@@ -145,7 +145,6 @@ public class MongoReplayStore implements ReplayStore{
             return List.of();
         }
     }
-
 
     @Override
     public List<ReplayEvent> findBySystemDlqId(ReplayRequest request) {

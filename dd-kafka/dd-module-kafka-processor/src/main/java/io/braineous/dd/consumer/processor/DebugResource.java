@@ -2,6 +2,7 @@ package io.braineous.dd.consumer.processor;
 
 import ai.braineous.rag.prompt.cgo.api.GraphView;
 import ai.braineous.rag.prompt.models.cgo.graph.GraphSnapshot;
+import com.google.gson.JsonObject;
 import io.braineous.dd.core.model.CaptureStore;
 import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.MediaType;
@@ -30,16 +31,15 @@ public class DebugResource {
     @Produces(MediaType.APPLICATION_JSON)
     public String graph() {
         CaptureStore store = CaptureStore.getInstance();
-        GraphView view = store.getSnapshot();
+        JsonObject view = store.getSnapshot();
         if (view == null) {
             return "{\"status\":\"EMPTY\"}";
         }
         // Prefer: if GraphSnapshot has toJson()
-        if (view instanceof GraphSnapshot snap) {
-            return snap.toJson().toString();
-        }
+        return view.toString();
+
         // fallback: minimal
-        return "{\"status\":\"OK\"}";
+        //return "{\"status\":\"OK\"}";
     }
 
 

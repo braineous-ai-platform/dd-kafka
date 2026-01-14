@@ -3,6 +3,7 @@ package io.braineous.dd.consumer.service;
 import ai.braineous.rag.prompt.cgo.api.Fact;
 import ai.braineous.rag.prompt.observe.Console;
 import com.google.gson.JsonObject;
+import io.braineous.dd.cgo.DDEventFactExtractor;
 import org.junit.jupiter.api.Test;
 
 import java.nio.charset.StandardCharsets;

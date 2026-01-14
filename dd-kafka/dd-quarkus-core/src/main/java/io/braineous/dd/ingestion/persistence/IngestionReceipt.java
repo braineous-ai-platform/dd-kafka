@@ -1,4 +1,4 @@
-package io.braineous.dd.consumer.service.persistence;
+package io.braineous.dd.ingestion.persistence;
 
 import ai.braineous.rag.prompt.models.cgo.graph.SnapshotHash;
 import com.google.gson.JsonObject;
@@ -6,8 +6,6 @@ import com.google.gson.JsonParser;
 import io.braineous.dd.core.model.Why;
 
 import java.time.Instant;
-import java.time.LocalDate;
-import java.time.ZoneOffset;
 import java.util.StringJoiner;
 
 public final class IngestionReceipt {
@@ -23,10 +21,6 @@ public final class IngestionReceipt {
     private final String payloadHash;
     private final SnapshotHash snapshotHash;
 
-    // -------- Graph stats --------
-    private final int nodeCount;
-    private final int edgeCount;
-
     // -------- Provenance --------
     private final String storeType;         // mongo | memory | future
 
@@ -41,8 +35,6 @@ public final class IngestionReceipt {
             Why why,
             String payloadHash,
             SnapshotHash snapshotHash,
-            int nodeCount,
-            int edgeCount,
             String storeType,
             Instant createdAt
     ) {
@@ -51,8 +43,6 @@ public final class IngestionReceipt {
         this.why = why;
         this.payloadHash = payloadHash;
         this.snapshotHash = snapshotHash;
-        this.nodeCount = nodeCount;
-        this.edgeCount = edgeCount;
         this.storeType = storeType;
         this.createdAt = createdAt;
     }
@@ -62,8 +52,6 @@ public final class IngestionReceipt {
     public Why why() { return why; }
     public String payloadHash() { return payloadHash; }
     public SnapshotHash snapshotHash() { return snapshotHash; }
-    public int nodeCount() { return nodeCount; }
-    public int edgeCount() { return edgeCount; }
     public String storeType() { return storeType; }
     public Instant createdAt() { return createdAt; }
 
@@ -73,8 +61,6 @@ public final class IngestionReceipt {
             String ingestionId,
             String payloadHash,
             SnapshotHash snapshotHash,
-            int nodeCount,
-            int edgeCount,
             String storeType
     ) {
         return new IngestionReceipt(
@@ -83,8 +69,6 @@ public final class IngestionReceipt {
                 null,
                 payloadHash,
                 snapshotHash,
-                nodeCount,
-                edgeCount,
                 storeType,
                 Instant.now()
         ).validate();
@@ -95,8 +79,6 @@ public final class IngestionReceipt {
             String payloadHash,
             SnapshotHash snapshotHash,
             Why why,
-            int nodeCount,
-            int edgeCount,
             String storeType
     ) {
         return new IngestionReceipt(
@@ -105,8 +87,6 @@ public final class IngestionReceipt {
                 why,
                 payloadHash,
                 snapshotHash,
-                nodeCount,
-                edgeCount,
                 storeType,
                 Instant.now()
         ).validate();
@@ -137,9 +117,6 @@ public final class IngestionReceipt {
                     || this.snapshotHash.getValue().trim().isEmpty()) {
                 throw new IllegalArgumentException("snapshotHash_required");
             }
-            if (this.nodeCount < 0 || this.edgeCount < 0) {
-                throw new IllegalArgumentException("counts_invalid");
-            }
         }
 
         // ok=false receipts can be partial (fail-fast before hashes/snapshot computed)
@@ -160,13 +137,6 @@ public final class IngestionReceipt {
         }
     }
 
-    public static String nextIngestionId() {
-        // example: DD-ING-20260107-<nano>
-        String day = LocalDate.now(ZoneOffset.UTC).toString().replace("-", "");
-        long nano = System.nanoTime();
-        return "DD-ING-" + day + "-" + nano;
-    }
-
     public JsonObject toJson() {
         var j = new JsonObject();
         j.addProperty("ingestionId", ingestionId);
@@ -180,8 +150,6 @@ public final class IngestionReceipt {
         if (payloadHash != null) j.addProperty("payloadHash", payloadHash);
         if (snapshotHash != null) j.addProperty("snapshotHash", snapshotHash.getValue());
 
-        j.addProperty("nodeCount", nodeCount);
-        j.addProperty("edgeCount", edgeCount);
         j.addProperty("storeType", storeType);
         j.addProperty("createdAt", createdAt.toString());
         return j;
@@ -195,8 +163,6 @@ public final class IngestionReceipt {
                 .add("why=" + why)
                 .add("payloadHash='" + payloadHash + "'")
                 .add("snapshotHash=" + (snapshotHash == null ? null : snapshotHash.getValue()))
-                .add("nodeCount=" + nodeCount)
-                .add("edgeCount=" + edgeCount)
                 .add("storeType='" + storeType + "'")
                 .add("createdAt=" + createdAt)
                 .toString();
