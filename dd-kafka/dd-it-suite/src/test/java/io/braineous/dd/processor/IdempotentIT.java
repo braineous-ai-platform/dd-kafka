@@ -535,7 +535,7 @@ public class IdempotentIT {
 
 
 
-    @org.junit.jupiter.api.Disabled("PARKED: ingestionId determinism across retries requires DLQ-aware resolveIngestionId; enable after DLQ integration")
+
     @Test
     void orchestrate_transportThrows_shouldFail_and_notProduce(TestInfo ti) throws Exception {
 
@@ -586,8 +586,7 @@ public class IdempotentIT {
         // lock exact reason (now observed)
         assertEquals("DD-REST-call_failed", result.getWhy().getReason());
 
-        // transport failure happens AFTER anchoring + consumer persistence in current spine,
-        // so ingestionId WILL exist and Mongo doc WILL exist.
+        // ingestionId should still exist (anchor assignment happens before publish attempt)
         String ingestionId = result.getIngestionId();
         assertNotNull(ingestionId);
         assertTrue(ingestionId.trim().length() > 0);
@@ -596,7 +595,8 @@ public class IdempotentIT {
         Thread.sleep(500);
         assertEquals(0, getInt(CONSUMER_BASE + "/debug/captures/size"));
 
-        // assert anchor/store side-effect DOES exist (Mongo has the doc)
+        // IMPORTANT (new spine): persistence is EP-only after Kafka.
+        // Since transport failed, EP never ran => Mongo ingestion doc must NOT exist.
         com.mongodb.client.MongoClient mongo =
                 com.mongodb.client.MongoClients.create("mongodb://localhost:27017");
 
@@ -608,96 +608,12 @@ public class IdempotentIT {
 
         mongo.close();
 
-        assertNotNull(doc, "Expected Mongo ingestion record for ingestionId=" + ingestionId + " (anchoring persists before transport)");
+        Console.log("it_anchor_mongo_doc", doc);
 
-        String storedPayloadJson = doc.getString("payload");
-        Console.log("it_anchor_mongo_payload", storedPayloadJson);
-
-        assertNotNull(storedPayloadJson);
-        assertTrue(storedPayloadJson.trim().length() > 0);
-
-        com.google.gson.JsonObject storedObj =
-                com.google.gson.JsonParser.parseString(storedPayloadJson).getAsJsonObject();
-
-        assertEquals(ingestionId, storedObj.get("ingestionId").getAsString());
-        assertEquals("requests", storedObj.getAsJsonObject("kafka").get("topic").getAsString());
+        assertNull(doc, "Expected NO Mongo ingestion record for ingestionId=" + ingestionId
+                + " because transport failed before Kafka; EP persistence did not run");
     }
 
-
-    @org.junit.jupiter.api.Disabled("PARKED: ingestionId determinism across retries requires DLQ-aware resolveIngestionId; enable after DLQ integration")
-    @Test
-    void orchestrate_sameEventTwice_shouldConsumeTwice_forNow(TestInfo ti) throws Exception {
-
-        // clear consumer store
-        postNoBody(CONSUMER_BASE + "/debug/captures/clear");
-
-        DDEvent event = DDEvent.of(
-                        "requests",
-                        3,
-                        48192L,
-                        1767114000123L,
-                        "fact-001",
-                        "base64",
-                        "AAECAwQFBgcICQ=="
-                ).header("traceId", "8f3a9c12")
-                .header("itTest", ti.getDisplayName())
-                .header("correlationId", "corr-9911");
-
-        // build event
-        GsonJsonSerializer serializer = new GsonJsonSerializer();
-        JsonObject ddEventJson = JsonParser.parseString(serializer.toJson(event)).getAsJsonObject();
-
-        // real poster (no mock)
-        HttpPoster httpPoster = new DDIngestionHttpPoster();
-
-        // orchestrate (send twice)
-        orch.setHttpPoster(httpPoster);
-
-        ProcessorResult r1 = orch.orchestrate(ddEventJson);
-        Console.log("DUP_SEND_1", r1);
-
-        ProcessorResult r2 = orch.orchestrate(ddEventJson);
-        Console.log("DUP_SEND_2", r2);
-
-        assertNotNull(r1);
-        assertTrue(r1.isOk(), "First send failed: " + (r1.getWhy() != null ? r1.getWhy() : "null"));
-
-        assertNotNull(r2);
-        assertTrue(r2.isOk(), "Second send failed: " + (r2.getWhy() != null ? r2.getWhy() : "null"));
-
-        // anchor invariants: ingestionId should be deterministic for same event
-        assertNotNull(r1.getIngestionId());
-        assertNotNull(r2.getIngestionId());
-        assertEquals(r1.getIngestionId(), r2.getIngestionId(), "Anchor ingestionId must be stable for same event");
-
-        // poll until size == 2 (or timeout)
-        long deadline = System.currentTimeMillis() + 10_000;
-        int size = 0;
-        while (System.currentTimeMillis() < deadline) {
-            size = getInt(CONSUMER_BASE + "/debug/captures/size");
-            if (size >= 2) break;
-            Thread.sleep(100);
-        }
-
-        Console.log("CONSUMER_SIZE", size);
-        assertEquals(2, size, "Expected two consumed messages for duplicate sends (pre-idempotency)");
-
-        // store assertion: even if consumer sees dup twice, anchor doc should exist
-        String ingestionId = r1.getIngestionId();
-
-        com.mongodb.client.MongoClient mongo =
-                com.mongodb.client.MongoClients.create("mongodb://localhost:27017");
-
-        com.mongodb.client.MongoCollection<org.bson.Document> col =
-                mongo.getDatabase("dd").getCollection("ingestion");
-
-        org.bson.Document doc =
-                col.find(new org.bson.Document("ingestionId", ingestionId)).first();
-
-        mongo.close();
-
-        assertNotNull(doc, "Expected Mongo ingestion record for ingestionId=" + ingestionId);
-    }
 
 
     @Test
@@ -784,7 +700,9 @@ public class IdempotentIT {
 
     //end-to-end processorOrch -> producer ->consumer -> cgo
 
-    @org.junit.jupiter.api.Disabled("PARKED: ingestionId determinism across retries requires DLQ-aware resolveIngestionId; enable after DLQ integration")
+
+
+    //@org.junit.jupiter.api.Disabled("PARKED: ingestionId determinism across retries requires DLQ-aware resolveIngestionId; enable after DLQ integration")
     @Test
     void idempotency_sameEventTwice_shouldNotChangeGraphSnapshot(TestInfo ti) throws Exception {
 
@@ -804,36 +722,48 @@ public class IdempotentIT {
                 .header("correlationId", "corr-9911");
 
         GsonJsonSerializer serializer = new GsonJsonSerializer();
-        JsonObject ddEventJson = JsonParser.parseString(serializer.toJson(event)).getAsJsonObject();
+
+        // IMPORTANT: build fresh JSON for each send (orch mutates input by adding ingestionId + view)
+        JsonObject ddEventJson1 = JsonParser.parseString(serializer.toJson(event)).getAsJsonObject();
 
         // real poster
         HttpPoster httpPoster = new DDIngestionHttpPoster();
-
-        // orchestrate twice
         orch.setHttpPoster(httpPoster);
 
-        ProcessorResult r1 = orch.orchestrate(ddEventJson);
+        // ---- send #1 ----
+        ProcessorResult r1 = orch.orchestrate(ddEventJson1);
         Console.log("IDEMPOTENCY_SEND_1", r1);
         assertNotNull(r1);
         assertTrue(r1.isOk(), "First send failed: " + (r1.getWhy() != null ? r1.getWhy() : "null"));
 
-        assertNotNull(r1.getIngestionId());
-        assertTrue(r1.getIngestionId().trim().length() > 0);
+        String id1 = r1.getIngestionId();
+        assertNotNull(id1);
+        assertTrue(id1.trim().length() > 0);
+
+        // HARDEN: wait until EP has persisted ingestion doc (so resolveIngestionId can find it)
+        awaitMongoIngestionDoc(id1);
 
         // wait for graph to appear and capture hash1
         awaitGraphNonEmpty();
         String hash1 = fetchGraphCanonicalSha256();
         Console.log("IDEMPOTENCY_GRAPH_HASH_1", hash1);
 
-        ProcessorResult r2 = orch.orchestrate(ddEventJson);
+        // ---- send #2 (true retry: fresh JSON) ----
+        JsonObject ddEventJson2 = JsonParser.parseString(serializer.toJson(event)).getAsJsonObject();
+
+        ProcessorResult r2 = orch.orchestrate(ddEventJson2);
         Console.log("IDEMPOTENCY_SEND_2", r2);
         assertNotNull(r2);
         assertTrue(r2.isOk(), "Second send failed: " + (r2.getWhy() != null ? r2.getWhy() : "null"));
 
-        assertNotNull(r2.getIngestionId());
-        assertEquals(r1.getIngestionId(), r2.getIngestionId(), "Anchor ingestionId must be stable for same event");
+        String id2 = r2.getIngestionId();
+        assertNotNull(id2);
+        assertTrue(id2.trim().length() > 0);
 
-        // optional: allow consumer to consume twice (transport may still deliver dup)
+        // Now determinism should hold: same snapshotHash => same ingestionId
+        assertEquals(id1, id2, "Anchor ingestionId must be stable for same event");
+
+        // allow consumer to consume twice (transport may still deliver dup)
         awaitSizeAtLeast(2);
 
         // fetch hash2 and assert unchanged
@@ -845,8 +775,33 @@ public class IdempotentIT {
     }
 
 
-
     //---------------------------------------------------------------------------------------
+    private void awaitMongoIngestionDoc(String ingestionId) {
+        long deadline = System.currentTimeMillis() + 5000L;
+
+        com.mongodb.client.MongoClient mongo =
+                com.mongodb.client.MongoClients.create("mongodb://localhost:27017");
+        try {
+            com.mongodb.client.MongoCollection<org.bson.Document> col =
+                    mongo.getDatabase("dd").getCollection("ingestion");
+
+            while (System.currentTimeMillis() < deadline) {
+                org.bson.Document doc =
+                        col.find(new org.bson.Document("ingestionId", ingestionId)).first();
+                if (doc != null) {
+                    Console.log("IDEMPOTENCY_MONGO_DOC_FOUND", ingestionId);
+                    return;
+                }
+                try { Thread.sleep(50L); } catch (InterruptedException ie) { Thread.currentThread().interrupt(); break; }
+            }
+
+            org.junit.jupiter.api.Assertions.fail("timeout waiting for mongo ingestion doc for ingestionId=" + ingestionId);
+
+        } finally {
+            mongo.close();
+        }
+    }
+
     private void awaitSizeAtLeast(int expected) throws Exception {
         long deadline = System.currentTimeMillis() + 10_000;
         int size = 0;
