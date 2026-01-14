@@ -6,6 +6,7 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import io.braineous.dd.core.model.Why;
+import io.braineous.dd.dlq.service.DLQOrchestrator;
 import io.braineous.dd.ingestion.persistence.IngestionReceipt;
 import io.braineous.dd.ingestion.persistence.IngestionStore;
 
@@ -14,6 +15,9 @@ import jakarta.inject.Inject;
 
 @ApplicationScoped
 public class DDEventOrchestrator {
+
+    @Inject
+    private DLQOrchestrator dlqOrch;
 
     @Inject
     private IngestionStore store;

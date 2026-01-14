@@ -7,7 +7,9 @@ import io.braineous.dd.core.processor.HttpPoster;
 import io.braineous.dd.core.processor.JsonSerializer;
 import io.braineous.dd.dlq.model.DLQResult;
 import io.braineous.dd.dlq.service.client.DLQClient;
+import jakarta.enterprise.context.ApplicationScoped;
 
+@ApplicationScoped
 public class DLQOrchestrator {
     private static final String DOMAIN_ENDPOINT = "/domain_failure";
     private static final String SYSTEM_ENDPOINT = "/system_failure";
@@ -19,7 +21,7 @@ public class DLQOrchestrator {
     private final JsonSerializer serializer = new GsonJsonSerializer();
 
 
-    private DLQOrchestrator() {
+    public DLQOrchestrator() {
     }
 
     public static DLQOrchestrator getInstance(){

@@ -7,6 +7,7 @@ import ai.braineous.rag.prompt.models.cgo.graph.SnapshotHash;
 import com.google.gson.JsonObject;
 
 import io.braineous.dd.cgo.DDCGOOrchestrator;
+import io.braineous.dd.dlq.service.DLQOrchestrator;
 import io.braineous.dd.ingestion.persistence.MongoIngestionStore;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
@@ -28,6 +29,9 @@ public class ProcessorOrchestrator {
 
     @Inject
     private DDCGOOrchestrator cgoOrchestrator;
+
+    @Inject
+    private DLQOrchestrator dlqOrch;
 
 
     public void setHttpPoster(HttpPoster httpPoster) {
