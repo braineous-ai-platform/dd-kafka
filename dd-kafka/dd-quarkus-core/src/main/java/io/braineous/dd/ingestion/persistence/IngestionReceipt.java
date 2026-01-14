@@ -29,6 +29,10 @@ public final class IngestionReceipt {
 
     //------------------------------------------------------------------
 
+    private boolean sysDlqEnabled = false;
+
+    //------------------------------------------------------------------
+
     private IngestionReceipt(
             String ingestionId,
             boolean ok,
@@ -54,6 +58,14 @@ public final class IngestionReceipt {
     public SnapshotHash snapshotHash() { return snapshotHash; }
     public String storeType() { return storeType; }
     public Instant createdAt() { return createdAt; }
+
+    public boolean isSysDlqEnabled() {
+        return sysDlqEnabled;
+    }
+
+    public void setSysDlqEnabled(boolean sysDlqEnabled) {
+        this.sysDlqEnabled = sysDlqEnabled;
+    }
 
     //--------------------------------------------------------------------
 

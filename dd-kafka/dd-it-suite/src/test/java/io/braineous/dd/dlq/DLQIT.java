@@ -12,6 +12,7 @@ import io.braineous.dd.dlq.service.DLQOrchestrator;
 import io.braineous.dd.dlq.service.client.DLQClient;
 import io.braineous.dd.dlq.service.client.DLQHttpPoster;
 import io.quarkus.test.junit.QuarkusTest;
+import jakarta.inject.Inject;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -20,13 +21,13 @@ import static org.junit.jupiter.api.Assertions.*;
 @QuarkusTest
 public class DLQIT {
 
-    /*@BeforeEach
+    @Inject
+    private DLQOrchestrator orch;
+
+    @BeforeEach
     void setup() {
         CaptureStore.getInstance().clear();
     }
-
-
-
 
     @Test
     void domainFailure_routes_and_records() {
@@ -34,7 +35,6 @@ public class DLQIT {
         JsonObject ddEventJson = new JsonObject();
         ddEventJson.addProperty("k", "v");
 
-        DLQOrchestrator orch = DLQOrchestrator.getInstance();
         orch.setHttpPoster(poster);
         orch.orchestrateDomainFailure(ddEventJson);
 
@@ -50,9 +50,9 @@ public class DLQIT {
         JsonObject ddEventJson = new JsonObject();
         ddEventJson.addProperty("sys", "boom");
 
-        DLQOrchestrator orch = DLQOrchestrator.getInstance();
         orch.setHttpPoster(poster);
-        orch.orchestrateSystemFailure(ddEventJson);
+        orch.orchestrateSystemFailure(new Exception("dlq_it_test"),
+                ddEventJson.toString());
 
         assertEquals(1, CaptureStore.getInstance().sizeSystemFailure());
         assertNotNull(CaptureStore.getInstance().getDlqResult());
@@ -62,7 +62,6 @@ public class DLQIT {
     @Test
     void nullInput_does_nothing() {
         HttpPoster poster = new DLQHttpPoster();
-        DLQOrchestrator orch = DLQOrchestrator.getInstance();
         orch.setHttpPoster(poster);
         orch.orchestrateDomainFailure(null);
 
@@ -99,6 +98,6 @@ public class DLQIT {
         assertNotNull(result.getDurationMs());
         assertEquals(ddEventJson, result.getDdEventJson());
         assertNotNull(result.getId());
-    }*/
+    }
 
 }

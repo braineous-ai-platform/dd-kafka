@@ -81,13 +81,20 @@ public class DLQOrchestrator {
             }
 
             String message = exception.getMessage();
-            dlqEvent.addProperty("dlqSystemException", message);
+            if (message == null || message.trim().length() == 0) {
+                message = exception.getClass().getName();
+            }
 
-            DLQResult result = this.orchestrateSystemFailure(dlqEvent);
+            JsonObject out = dlqEvent.deepCopy();
+            out.addProperty("dlqSystemCode", "DD-DLQ-SYSTEM-EXCEPTION");
+            out.addProperty("dlqSystemException", message);
+
+
+            DLQResult result = this.orchestrateSystemFailure(out);
 
             return result;
         }catch(Exception e){
-            Console.log("error_processing_dlq_system_failure", e.getMessage());
+            Console.log("error_processing_dlq_system_failure", String.valueOf(e));
             return null;
         }
     }

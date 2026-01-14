@@ -53,7 +53,16 @@ public class DDEventOrchestrator {
             }
 
             // ---- persist raw envelope for Replay/time-window surfaces ----
-            return store.storeIngestion(ddEvent.toString());
+            IngestionReceipt receipt = store.storeIngestion(ddEvent.toString());
+
+            //check for DLQ-S qualified failures and emit to the channel
+            //still send receipt to the caller
+            if(!receipt.ok() && receipt.isSysDlqEnabled()){
+                Exception dlqException = new Exception(receipt.toJson().toString());
+                this.dlqOrch.orchestrateSystemFailure(dlqException, ingestionStr);
+            }
+
+            return receipt;
 
         } catch (IllegalArgumentException iae) {
             // hard domain fail: no ingestionId axis possible

@@ -26,7 +26,6 @@ public class MongoIngestionStore implements IngestionStore {
     public static final String DB  = "dd";
     public static final String COL = "ingestion";
 
-    private static final String F_ID_KEY        = "idKey";
     public static final String F_SNAPSHOT_HASH = "snapshotHash";
     private static final String F_PAYLOAD_HASH  = "payloadHash";
 
@@ -40,10 +39,8 @@ public class MongoIngestionStore implements IngestionStore {
         try {
             // Idempotency contract: UNIQUE on idKey
             // If race happens, treat duplicate key as idempotent success (no read-back).
-            col.createIndex(new Document(F_ID_KEY, 1), new com.mongodb.client.model.IndexOptions().unique(true));
-
             col.createIndex(new Document("createdAt", -1));
-            col.createIndex(new Document(F_SNAPSHOT_HASH, 1));
+            col.createIndex(new Document(F_SNAPSHOT_HASH, 1), new com.mongodb.client.model.IndexOptions().unique(true));
             col.createIndex(new Document(F_PAYLOAD_HASH, 1));
         } catch (Exception ignored) {
             // swallow: indexes are not a runtime concern in this phase
@@ -81,8 +78,14 @@ public class MongoIngestionStore implements IngestionStore {
         }
         ingestionId = ingestionJson.get("ingestionId").getAsString();
 
-        JsonObject view = ingestionJson.get("view").getAsJsonObject();
-        // ---------- fail-fast: view ----------
+        JsonObject view = null;
+
+        if (ingestionJson.has("view")
+                && ingestionJson.get("view") != null
+                && ingestionJson.get("view").isJsonObject()) {
+            view = ingestionJson.get("view").getAsJsonObject();
+        }
+
         if (view == null) {
             return IngestionReceipt.failDomain(
                     ingestionId,
@@ -93,21 +96,26 @@ public class MongoIngestionStore implements IngestionStore {
             );
         }
 
+        String snap = null;
+        if (view.has(F_SNAPSHOT_HASH)
+                && view.get(F_SNAPSHOT_HASH) != null
+                && view.get(F_SNAPSHOT_HASH).isJsonPrimitive()) {
+            snap = view.get(F_SNAPSHOT_HASH).getAsString();
+        }
+
         String payloadHash = IngestionReceipt.sha256Hex(payload);
-
-        String snap = view.get(MongoIngestionStore.F_SNAPSHOT_HASH).getAsString();
-
-        SnapshotHash snapshotHash = new SnapshotHash(snap);
-
         if (snap == null || snap.trim().isEmpty()) {
             return IngestionReceipt.failDomain(
                     ingestionId,
                     payloadHash,
-                    snapshotHash,
+                    null,
                     new Why("DD-ING-snapshotHash_blank", "snapshotHash cannot be blank"),
                     "mongo"
             );
         }
+
+        SnapshotHash snapshotHash = new SnapshotHash(snap);
+
 
 
         MongoCollection<Document> col = collection();
@@ -178,22 +186,27 @@ public class MongoIngestionStore implements IngestionStore {
                 );
             }
 
-            return IngestionReceipt.failDomain(
+            IngestionReceipt dlqReceipt = IngestionReceipt.failDomain(
                     ingestionId,
                     payloadHash,
                     snapshotHash,
                     new Why("DD-ING-mongo_write_failed", mwx.getMessage()),
                     "mongo"
             );
+            dlqReceipt.setSysDlqEnabled(true);
+
+            return dlqReceipt;
 
         } catch (Exception e) {
-            return IngestionReceipt.failDomain(
+            IngestionReceipt dlqReceipt = IngestionReceipt.failDomain(
                     ingestionId,
                     payloadHash,
                     snapshotHash,
                     new Why("DD-ING-mongo_insert_failed", e.getMessage()),
                     "mongo"
             );
+            dlqReceipt.setSysDlqEnabled(true);
+            return dlqReceipt;
         }
 
 

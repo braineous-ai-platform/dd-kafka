@@ -56,14 +56,16 @@ public class ProcessorOrchestrator {
                     snapshot.snapshotHash().getValue() == null ||
                     snapshot.snapshotHash().getValue().trim().length() == 0
             ) {
-                //record as DLQ System Failure
-                this.dlqOrch.orchestrateSystemFailure(
-                        new Exception("DD-ORCH-INGESTION_ID-cgo" + "system_view_is_null"),
+                //TODO: candidate for DLQ-Quantine channel in 1.0.1. for now
+                //simple REST layer 400 validation response
+                //to avoid replay poison pill
+                /*this.dlqOrch.orchestrateSystemFailure(
+                        new Exception("DD-ORCH-INGESTION_ID-cgo" + "cgo_view_null"),
                         ddEventJson.toString()
-                );
+                );*/
 
                 return ProcessorResult.fail(ddEventJson,
-                        new Why("DD-ORCH-INGESTION_ID-cgo", "system_view_is_null"));
+                        new Why("DD-ORCH-INGESTION_ID-cgo", "cgo_view_null"));
             }
 
             // Direction: choose one transport later (Kafka emit OR REST call).
@@ -73,14 +75,16 @@ public class ProcessorOrchestrator {
 
             String ingestionId = this.nextIngestionId(ddEventStr, view);
             if (ingestionId == null) {
-                //record as DLQ System Failure
-                this.dlqOrch.orchestrateSystemFailure(
-                        new Exception("DD-ORCH-INGESTION_ID-cgo" + "system_ingestion_id_is_null"),
+                //TODO: candidate for DLQ-Quantine channel in 1.0.1. for now
+                //simple REST layer 400 validation response
+                //to avoid replay poison pill
+                /*this.dlqOrch.orchestrateSystemFailure(
+                        new Exception("DD-ORCH-INGESTION_ID-cgo" + "ingestion_id_null"),
                         ddEventJson.toString()
-                );
+                );*/
 
                 return ProcessorResult.fail(ddEventJson,
-                        new Why("DD-ORCH-INGESTION_ID-cgo", "system_ingestion_id_is_null"));
+                        new Why("DD-ORCH-INGESTION_ID-cgo", "ingestion_id_null"));
             }
 
             ddEventJson.addProperty("ingestionId", ingestionId);
