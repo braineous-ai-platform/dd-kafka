@@ -57,8 +57,14 @@ public class DDEventOrchestrator {
 
         } catch (IllegalArgumentException iae) {
             // hard domain fail: no ingestionId axis possible
+            //record as DLQ System Failure
+            this.dlqOrch.orchestrateSystemFailure(iae, ingestionStr);
+
             throw iae;
         } catch (Exception e) {
+            //record as DLQ System Failure
+            this.dlqOrch.orchestrateSystemFailure(e, ingestionStr);
+
             throw new RuntimeException(e);
         }
     }

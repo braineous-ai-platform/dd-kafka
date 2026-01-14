@@ -3,6 +3,7 @@ package io.braineous.dd.dlq.service.client;
 import ai.braineous.cgo.config.ConfigService;
 import io.braineous.dd.core.config.DDConfigService;
 import io.braineous.dd.core.processor.HttpPoster;
+import jakarta.enterprise.context.ApplicationScoped;
 
 public class DLQHttpPoster implements HttpPoster {
 

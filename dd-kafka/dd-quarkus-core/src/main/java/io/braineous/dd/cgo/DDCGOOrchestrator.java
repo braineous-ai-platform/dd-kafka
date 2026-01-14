@@ -12,6 +12,9 @@ import jakarta.enterprise.context.ApplicationScoped;
 
 @ApplicationScoped
 public class DDCGOOrchestrator {
+
+    //TODO: integrate DLQOrchestrator
+
     private LLMBridge llmBridge = new CausalLLMBridge();
 
     public GraphView orchestrate(String ingestionStr){

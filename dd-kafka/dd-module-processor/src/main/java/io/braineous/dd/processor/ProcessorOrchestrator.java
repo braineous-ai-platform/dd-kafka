@@ -39,55 +39,76 @@ public class ProcessorOrchestrator {
     }
 
     public ProcessorResult orchestrate(JsonObject ddEventJson) {
-        ProcessorResult validation = validate(ddEventJson);
-        if (!validation.isOk()) {
-            return validation;
+        try {
+            ProcessorResult validation = validate(ddEventJson);
+            if (!validation.isOk()) {
+                return validation;
+            }
+
+            //orchestrate with CGO Graph
+            String ddEventStr = ddEventJson.toString();
+            GraphView view = this.cgoOrchestrator.orchestrate(ddEventStr);
+
+            //Add view details
+            GraphSnapshot snapshot = (GraphSnapshot) view;
+            if (snapshot == null ||
+                    snapshot.snapshotHash() == null ||
+                    snapshot.snapshotHash().getValue() == null ||
+                    snapshot.snapshotHash().getValue().trim().length() == 0
+            ) {
+                //record as DLQ System Failure
+                this.dlqOrch.orchestrateSystemFailure(
+                        new Exception("DD-ORCH-INGESTION_ID-cgo" + "system_view_is_null"),
+                        ddEventJson.toString()
+                );
+
+                return ProcessorResult.fail(ddEventJson,
+                        new Why("DD-ORCH-INGESTION_ID-cgo", "system_view_is_null"));
+            }
+
+            // Direction: choose one transport later (Kafka emit OR REST call).
+            // For now route through a client stub so wiring stays stable.
+            String ingestionEndpoint = "/api/ingestion";
+            JsonSerializer serializer = new GsonJsonSerializer();
+
+            String ingestionId = this.nextIngestionId(ddEventStr, view);
+            if (ingestionId == null) {
+                //record as DLQ System Failure
+                this.dlqOrch.orchestrateSystemFailure(
+                        new Exception("DD-ORCH-INGESTION_ID-cgo" + "system_ingestion_id_is_null"),
+                        ddEventJson.toString()
+                );
+
+                return ProcessorResult.fail(ddEventJson,
+                        new Why("DD-ORCH-INGESTION_ID-cgo", "system_ingestion_id_is_null"));
+            }
+
+            ddEventJson.addProperty("ingestionId", ingestionId);
+
+            JsonObject viewJson = snapshot.toJson();
+            String snap = snapshot.snapshotHash().getValue();
+            viewJson.addProperty(MongoIngestionStore.F_SNAPSHOT_HASH, snap);
+            ddEventJson.add("view", viewJson);
+
+
+            ProcessorResult result = DDProducerClient.getInstance().invoke(
+                    this.httpPoster,
+                    serializer,
+                    ingestionEndpoint,
+                    ddEventJson,
+                    ddEventJson);
+            result.setIngestionId(ingestionId);
+
+            return result;
+        }catch(Exception e){
+            //record as DLQ System Failure
+            this.dlqOrch.orchestrateSystemFailure(e, ddEventJson.toString());
+
+            return ProcessorResult.fail(
+                    ddEventJson,
+                    new Why("DD-ORCH-SYSTEM-EXCEPTION", "systemException: " + e.getMessage())
+            );
         }
-
-        //orchestrate with CGO Graph
-        String ddEventStr = ddEventJson.toString();
-        GraphView view = this.cgoOrchestrator.orchestrate(ddEventStr);
-        //Add view details
-        GraphSnapshot snapshot = (GraphSnapshot)view;
-        if(snapshot == null ||
-                snapshot.snapshotHash() == null ||
-                snapshot.snapshotHash().getValue() == null ||
-                snapshot.snapshotHash().getValue().trim().length() == 0
-        ){
-            //TODO: send_to_dlq_system
-            return ProcessorResult.fail(ddEventJson,
-                    new Why("DD-ORCH-INGESTION_ID-cgo", "system_view_is_null"));
-        }
-
-        // Direction: choose one transport later (Kafka emit OR REST call).
-        // For now route through a client stub so wiring stays stable.
-        String ingestionEndpoint = "/api/ingestion";
-        JsonSerializer serializer = new GsonJsonSerializer();
-
-        String ingestionId = this.nextIngestionId(ddEventStr, view);
-        if(ingestionId == null){
-            //TODO: send_to_dlq_system
-            return ProcessorResult.fail(ddEventJson,
-                    new Why("DD-ORCH-INGESTION_ID-cgo", "system_ingestion_id_is_null"));
-        }
-
-        ddEventJson.addProperty("ingestionId", ingestionId);
-
-        JsonObject viewJson = snapshot.toJson();
-        String snap = snapshot.snapshotHash().getValue();
-        viewJson.addProperty(MongoIngestionStore.F_SNAPSHOT_HASH, snap);
-        ddEventJson.add("view", viewJson);
-
-
-
-        ProcessorResult result = DDProducerClient.getInstance().invoke(
-                this.httpPoster,
-                serializer,
-                ingestionEndpoint,
-                ddEventJson,
-                ddEventJson);
-        result.setIngestionId(ingestionId);
-        return result;
     }
 
 
