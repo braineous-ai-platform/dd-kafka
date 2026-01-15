@@ -183,6 +183,36 @@ public class IngestionResourceIT {
                 .body("data.events.size()", org.hamcrest.Matchers.equalTo(0));
     }
 
+    @Test
+    void it_events_byIngestionId_found_returns200_andMatchesMongoAxis() {
+
+        insertIngestionDoc("ID-LOOK-1", "2026-01-15T00:10:00Z", ddEventEnvelopeHelloBase64());
+
+        io.restassured.response.Response resp =
+                io.restassured.RestAssured
+                        .given()
+                        .accept("application/json")
+                        .when()
+                        .get("/api/ingestion/events/{ingestionId}", "ID-LOOK-1")
+                        .andReturn();
+
+        int code = resp.statusCode();
+        Console.log("it_events_byIngestionId_status", Integer.valueOf(code));
+        Console.log("it_events_byIngestionId_body", resp.asString());
+
+        org.junit.jupiter.api.Assertions.assertEquals(
+                200,
+                code,
+                "Anchor doctrine: only 200 is guaranteed. Anything else means NOT anchored."
+        );
+
+        resp.then()
+                .body("ok", org.hamcrest.Matchers.equalTo(true))
+                .body("why", org.hamcrest.Matchers.equalTo(null))
+                .body("data", org.hamcrest.Matchers.notNullValue())
+                .body("data.ingestionId", org.hamcrest.Matchers.equalTo("ID-LOOK-1"));
+    }
+
 
     // ---------------- helpers ----------------
 

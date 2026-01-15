@@ -199,23 +199,32 @@ public class IngestionResource {
 
     @Path("/ingestion/events/{ingestionId}")
     @GET
-    public Response findEventsByIngestionId(
-            String ingestionId
-    ){
-        //-----fail-fast------------
+    @Produces("application/json")
+    public jakarta.ws.rs.core.Response findEventsByIngestionId(
+            @jakarta.ws.rs.PathParam("ingestionId") String ingestionId
+    ) {
+        // ---- fail-fast: param ----
+        if (ingestionId == null || ingestionId.trim().isEmpty()) {
+            return badRequest("DD-INGEST-ingestionId_blank", "ingestionId cannot be blank");
+        }
 
-        //--------validate--------
+        // ---- orchestrate/store ----
+        com.google.gson.JsonObject event = store.findEventsByIngestionId(ingestionId.trim());
 
-        //------orchestrate---------
-        JsonObject event = store.findEventsByIngestionId(ingestionId);
+        // ---- not found ----
+        if (event == null || event.entrySet() == null || event.entrySet().isEmpty()) {
+            return notFound("DD-INGEST-ingestionId_not_found", "No event found for ingestionId=" + ingestionId.trim());
+        }
 
-        Response response = Response.
-                status(200).
-                entity(event.toString())
-                .build();
+        // ---- envelope A ----
+        com.google.gson.JsonObject out = new com.google.gson.JsonObject();
+        out.addProperty("ok", true);
+        out.add("data", event);
+        out.add("why", com.google.gson.JsonNull.INSTANCE);
 
-        return response;
+        return jakarta.ws.rs.core.Response.status(200).entity(out.toString()).build();
     }
+
 
     //---------------------------------------------------------------
     private static jakarta.ws.rs.core.Response badRequest(String code, String msg) {
@@ -230,6 +239,20 @@ public class IngestionResource {
 
         return jakarta.ws.rs.core.Response.status(400).entity(out.toString()).build();
     }
+
+    private static jakarta.ws.rs.core.Response notFound(String code, String msg) {
+        com.google.gson.JsonObject out = new com.google.gson.JsonObject();
+        out.addProperty("ok", false);
+        out.add("data", com.google.gson.JsonNull.INSTANCE);
+
+        com.google.gson.JsonObject why = new com.google.gson.JsonObject();
+        why.addProperty("code", code);
+        why.addProperty("msg", msg);
+        out.add("why", why);
+
+        return jakarta.ws.rs.core.Response.status(404).entity(out.toString()).build();
+    }
+
 }
 
 

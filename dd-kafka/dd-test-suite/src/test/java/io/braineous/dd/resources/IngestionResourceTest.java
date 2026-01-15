@@ -404,6 +404,64 @@ public class IngestionResourceTest {
         org.junit.jupiter.api.Assertions.assertEquals(0, data.getAsJsonArray("events").size());
     }
 
+    @Test
+    void http_findEventsByIngestionId_ingestionIdBlank_returns400() {
+        jakarta.ws.rs.core.Response resp = res.findEventsByIngestionId("   ");
+        Console.log("ut_status", resp.getStatus());
+        org.junit.jupiter.api.Assertions.assertEquals(400, resp.getStatus());
+
+        String json = (String) resp.getEntity();
+        Console.log("ut_body", json);
+
+        com.google.gson.JsonObject jo = com.google.gson.JsonParser.parseString(json).getAsJsonObject();
+        org.junit.jupiter.api.Assertions.assertFalse(jo.get("ok").getAsBoolean());
+        org.junit.jupiter.api.Assertions.assertEquals("DD-INGEST-ingestionId_blank", jo.getAsJsonObject("why").get("code").getAsString());
+    }
+
+    @Test
+    void http_findEventsByIngestionId_notFound_returns404() {
+        org.mockito.Mockito.when(store.findEventsByIngestionId(org.mockito.Mockito.eq("ID-404")))
+                .thenReturn(new com.google.gson.JsonObject());
+
+        jakarta.ws.rs.core.Response resp = res.findEventsByIngestionId("ID-404");
+        Console.log("ut_status", resp.getStatus());
+        org.junit.jupiter.api.Assertions.assertEquals(404, resp.getStatus());
+
+        String json = (String) resp.getEntity();
+        Console.log("ut_body", json);
+
+        com.google.gson.JsonObject jo = com.google.gson.JsonParser.parseString(json).getAsJsonObject();
+        org.junit.jupiter.api.Assertions.assertFalse(jo.get("ok").getAsBoolean());
+        org.junit.jupiter.api.Assertions.assertEquals("DD-INGEST-ingestionId_not_found", jo.getAsJsonObject("why").get("code").getAsString());
+    }
+
+    @Test
+    void http_findEventsByIngestionId_happyPath_returns200_envelopeA() {
+        com.google.gson.JsonObject e = new com.google.gson.JsonObject();
+        e.addProperty("ingestionId", "ID-1");
+        e.addProperty("createdAt", "2026-01-15T00:10:00Z");
+
+        org.mockito.Mockito.when(store.findEventsByIngestionId(org.mockito.Mockito.eq("ID-1")))
+                .thenReturn(e);
+
+        jakarta.ws.rs.core.Response resp = res.findEventsByIngestionId(" ID-1 ");
+        Console.log("ut_status", resp.getStatus());
+        org.junit.jupiter.api.Assertions.assertEquals(200, resp.getStatus());
+
+        String json = (String) resp.getEntity();
+        Console.log("ut_body", json);
+
+        com.google.gson.JsonObject out = com.google.gson.JsonParser.parseString(json).getAsJsonObject();
+        org.junit.jupiter.api.Assertions.assertTrue(out.get("ok").getAsBoolean());
+        org.junit.jupiter.api.Assertions.assertTrue(out.get("why").isJsonNull());
+
+        com.google.gson.JsonObject data = out.getAsJsonObject("data");
+        org.junit.jupiter.api.Assertions.assertEquals("ID-1", data.get("ingestionId").getAsString());
+
+        org.mockito.Mockito.verify(store, org.mockito.Mockito.times(1)).findEventsByIngestionId("ID-1");
+    }
+
+
 
     // ---------------- reflection helper ----------------
 
