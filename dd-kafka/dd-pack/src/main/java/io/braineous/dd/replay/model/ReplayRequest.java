@@ -2,11 +2,17 @@ package io.braineous.dd.replay.model;
 
 public class ReplayRequest {
 
-    private String stream;           // logical stream name (required)
+    // time-window replay
     private String fromTime;         // ISO-8601, optional
     private String toTime;           // ISO-8601, optional
-    private String objectKey;        // optional (business key)
+
+    // replay-by-ingestion (canonical selector)
+    private String ingestionId;      // optional
+
+    // replay-by-dlq
     private String dlqId;            // optional (domain or system)
+
+    // always required at API surface
     private String reason;           // human reason (required)
 
     public ReplayRequest() {
@@ -19,17 +25,14 @@ public class ReplayRequest {
 
     // ---------- JavaBean getters/setters (for JSON binding) ----------
 
-    public String getStream() { return stream; }
-    public void setStream(String stream) { this.stream = stream; }
-
     public String getFromTime() { return fromTime; }
     public void setFromTime(String fromTime) { this.fromTime = fromTime; }
 
     public String getToTime() { return toTime; }
     public void setToTime(String toTime) { this.toTime = toTime; }
 
-    public String getObjectKey() { return objectKey; }
-    public void setObjectKey(String objectKey) { this.objectKey = objectKey; }
+    public String getIngestionId() { return ingestionId; }
+    public void setIngestionId(String ingestionId) { this.ingestionId = ingestionId; }
 
     public String getDlqId() { return dlqId; }
     public void setDlqId(String dlqId) { this.dlqId = dlqId; }
@@ -37,21 +40,19 @@ public class ReplayRequest {
     public String getReason() { return reason; }
     public void setReason(String reason) { this.reason = reason; }
 
-    // ---------- internal / domain-style accessors (kept) ----------
+    // ---------- internal / domain-style accessors ----------
 
-    public String stream() { return stream; }
     public String fromTime() { return fromTime; }
     public String toTime() { return toTime; }
-    public String objectKey() { return objectKey; }
+    public String ingestionId() { return ingestionId; }
     public String dlqId() { return dlqId; }
     public String reason() { return reason; }
 
-    //-----------------------------------------------
+    // -----------------------------------------------------------------
     public void normalize() {
-        this.stream = trimToNull(this.stream);
         this.fromTime = trimToNull(this.fromTime);
         this.toTime = trimToNull(this.toTime);
-        this.objectKey = trimToNull(this.objectKey);
+        this.ingestionId = trimToNull(this.ingestionId);
         this.dlqId = trimToNull(this.dlqId);
         this.reason = trimToNull(this.reason);
     }
@@ -63,5 +64,6 @@ public class ReplayRequest {
         return t;
     }
 }
+
 
 

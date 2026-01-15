@@ -108,7 +108,7 @@ public class MongoReplayStore implements ReplayStore {
 
         final String key;
         try {
-            key = request.objectKey();
+            key = request.ingestionId();
         } catch (Exception e) {
             return java.util.Collections.emptyList();
         }

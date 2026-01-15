@@ -45,7 +45,6 @@ public class ReplayServiceIT {
         seedReplayDocs(); // ensure payload contains view.snapshotHash so ingestion store can resolve
 
         ReplayRequest req = new ReplayRequest();
-        set(req, "stream", "ingestion");
         set(req, "reason", "it-test");
         set(req, "fromTime", "2026-01-12T00:00:00Z");
         set(req, "toTime",   "2026-01-12T00:00:10Z");

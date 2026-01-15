@@ -19,7 +19,6 @@ public class ReplayResourceTest {
     // ---------------- helpers ----------------
 
     private static void validCommon(ReplayRequest req) {
-        when(req.stream()).thenReturn("ingestion");
         when(req.reason()).thenReturn("it-test");
     }
 
@@ -29,14 +28,22 @@ public class ReplayResourceTest {
         when(req.toTime()).thenReturn("2026-01-07T01:00:00Z");
     }
 
-    private static void validObjectKey(ReplayRequest req) {
+    private static void validIngestionId(ReplayRequest req) {
         validCommon(req);
-        when(req.objectKey()).thenReturn("OBJ-A");
+        when(req.ingestionId()).thenReturn("ID-123");
     }
 
     private static void validDlqId(ReplayRequest req) {
         validCommon(req);
         when(req.dlqId()).thenReturn("DLQ-A");
+    }
+
+    private static ReplayResult okResult() {
+        ReplayResult r = mock(ReplayResult.class);
+        when(r.ok()).thenReturn(true);
+        // reason not needed when ok=true, but keep safe
+        when(r.reason()).thenReturn(null);
+        return r;
     }
 
     private static ConfigGate enabledGate() {
@@ -66,15 +73,14 @@ public class ReplayResourceTest {
         ReplayRequest req = mock(ReplayRequest.class);
         validTimeWindow(req);
 
-        ReplayResult expected = ReplayResult.badRequest("TW");
-        ConfigGate cfgGate = enabledGate();
+        ReplayResult expected = okResult();
 
         ReplayService svc = mock(ReplayService.class);
         when(svc.replayByTimeWindow(req)).thenReturn(expected);
 
         ReplayResource r = new ReplayResource();
         r.setService(svc);
-        r.setGate(cfgGate);
+        r.setGate(enabledGate());
 
         Response resp = r.replayByTimeWindow(req);
         assertEquals(200, resp.getStatus());
@@ -87,21 +93,20 @@ public class ReplayResourceTest {
     }
 
     @Test
-    public void replayByTimeObjectKey_delegates_to_service() {
+    public void replayByIngestion_delegates_to_service() {
         ReplayRequest req = mock(ReplayRequest.class);
-        validObjectKey(req);
+        validIngestionId(req);
 
-        ReplayResult expected = ReplayResult.badRequest("TOK");
-        ConfigGate cfgGate = enabledGate();
+        ReplayResult expected = okResult();
 
         ReplayService svc = mock(ReplayService.class);
         when(svc.replayByTimeObjectKey(req)).thenReturn(expected);
 
         ReplayResource r = new ReplayResource();
         r.setService(svc);
-        r.setGate(cfgGate);
+        r.setGate(enabledGate());
 
-        Response resp = r.replayByTimeObjectKey(req);
+        Response resp = r.replayByIngestion(req);
         assertEquals(200, resp.getStatus());
 
         ReplayResult actual = entity(resp);
@@ -112,21 +117,20 @@ public class ReplayResourceTest {
     }
 
     @Test
-    public void replayByDomainDlqId_delegates_to_service() {
+    public void replayByDomainDlq_delegates_to_service() {
         ReplayRequest req = mock(ReplayRequest.class);
         validDlqId(req);
 
-        ReplayResult expected = ReplayResult.badRequest("DD");
-        ConfigGate cfgGate = enabledGate();
+        ReplayResult expected = okResult();
 
         ReplayService svc = mock(ReplayService.class);
         when(svc.replayByDomainDlqId(req)).thenReturn(expected);
 
         ReplayResource r = new ReplayResource();
         r.setService(svc);
-        r.setGate(cfgGate);
+        r.setGate(enabledGate());
 
-        Response resp = r.replayByDomainDlqId(req);
+        Response resp = r.replayByDomainDlq(req);
         assertEquals(200, resp.getStatus());
 
         ReplayResult actual = entity(resp);
@@ -137,21 +141,20 @@ public class ReplayResourceTest {
     }
 
     @Test
-    public void replayBySystemDlqId_delegates_to_service() {
+    public void replayBySystemDlq_delegates_to_service() {
         ReplayRequest req = mock(ReplayRequest.class);
         validDlqId(req);
 
-        ReplayResult expected = ReplayResult.badRequest("SD");
-        ConfigGate cfgGate = enabledGate();
+        ReplayResult expected = okResult();
 
         ReplayService svc = mock(ReplayService.class);
         when(svc.replayBySystemDlqId(req)).thenReturn(expected);
 
         ReplayResource r = new ReplayResource();
         r.setService(svc);
-        r.setGate(cfgGate);
+        r.setGate(enabledGate());
 
-        Response resp = r.replayBySystemDlqId(req);
+        Response resp = r.replayBySystemDlq(req);
         assertEquals(200, resp.getStatus());
 
         ReplayResult actual = entity(resp);
@@ -162,7 +165,7 @@ public class ReplayResourceTest {
     }
 
     @Test
-    public void replayByTimeWindow_returns_409_when_disabled() {
+    public void replayByTimeWindow_returns_403_when_disabled() {
         ReplayRequest req = mock(ReplayRequest.class);
 
         ReplayService svc = mock(ReplayService.class);
@@ -172,7 +175,7 @@ public class ReplayResourceTest {
         r.setGate(disabledGate());
 
         Response resp = r.replayByTimeWindow(req);
-        assertEquals(400, resp.getStatus());
+        assertEquals(403, resp.getStatus());
 
         ReplayResult actual = entity(resp);
         assertFalse(actual.ok());
@@ -182,39 +185,10 @@ public class ReplayResourceTest {
     }
 
     @Test
-    public void replayByTimeWindow_delegates_to_service_when_enabled() {
-        ReplayRequest req = mock(ReplayRequest.class);
-        validTimeWindow(req);
-
-        ConfigGate cfgGate = enabledGate();
-
-        ReplayResult expected = ReplayResult.empty(req);
-
-        ReplayService svc = mock(ReplayService.class);
-        when(svc.replayByTimeWindow(req)).thenReturn(expected);
-
-        ReplayResource r = new ReplayResource();
-        r.setService(svc);
-        r.setGate(cfgGate);
-
-        Response resp = r.replayByTimeWindow(req);
-        assertEquals(200, resp.getStatus());
-
-        ReplayResult actual = entity(resp);
-        assertSame(expected, actual);
-
-        verify(svc).replayByTimeWindow(req);
-        verifyNoMoreInteractions(svc);
-    }
-
-    @Test
-    public void replayByTimeWindow_badRequest_when_stream_missing_and_doesNotCallService() {
+    public void replayByTimeWindow_badRequest_when_reason_missing_and_doesNotCallService() {
         ReplayRequest req = mock(ReplayRequest.class);
 
-        ConfigGate cfgGate = enabledGate();
-
-        when(req.stream()).thenReturn("   ");
-        when(req.reason()).thenReturn("it-test");
+        when(req.reason()).thenReturn("   ");
         when(req.fromTime()).thenReturn("2026-01-07T00:00:00Z");
         when(req.toTime()).thenReturn("2026-01-07T01:00:00Z");
 
@@ -222,14 +196,14 @@ public class ReplayResourceTest {
 
         ReplayResource r = new ReplayResource();
         r.setService(svc);
-        r.setGate(cfgGate);
+        r.setGate(enabledGate());
 
         Response resp = r.replayByTimeWindow(req);
         assertEquals(400, resp.getStatus());
 
         ReplayResult actual = entity(resp);
         assertFalse(actual.ok());
-        assertEquals("DD-REPLAY-bad_request-stream_missing", actual.reason());
+        assertEquals("DD-REPLAY-bad_request-reason_missing", actual.reason());
 
         verifyNoInteractions(svc);
     }
@@ -238,19 +212,15 @@ public class ReplayResourceTest {
     public void replayByTimeWindow_badRequest_when_window_invalid_and_doesNotCallService() {
         ReplayRequest req = mock(ReplayRequest.class);
 
-        ConfigGate cfgGate = enabledGate();
-
-        when(req.stream()).thenReturn("ingestion");
         when(req.reason()).thenReturn("it-test");
-
         when(req.fromTime()).thenReturn("2026-01-07T00:00:00Z");
-        when(req.toTime()).thenReturn("2026-01-07T00:00:00Z"); // from == to => invalid
+        when(req.toTime()).thenReturn("2026-01-07T00:00:00Z"); // invalid (from == to)
 
         ReplayService svc = mock(ReplayService.class);
 
         ReplayResource r = new ReplayResource();
         r.setService(svc);
-        r.setGate(cfgGate);
+        r.setGate(enabledGate());
 
         Response resp = r.replayByTimeWindow(req);
         assertEquals(400, resp.getStatus());
@@ -266,11 +236,7 @@ public class ReplayResourceTest {
     public void replayByTimeWindow_badRequest_when_window_parse_fails_and_doesNotCallService() {
         ReplayRequest req = mock(ReplayRequest.class);
 
-        ConfigGate cfgGate = enabledGate();
-
-        when(req.stream()).thenReturn("ingestion");
         when(req.reason()).thenReturn("it-test");
-
         when(req.fromTime()).thenReturn("NOT_INSTANT");
         when(req.toTime()).thenReturn("2026-01-07T01:00:00Z");
 
@@ -278,7 +244,7 @@ public class ReplayResourceTest {
 
         ReplayResource r = new ReplayResource();
         r.setService(svc);
-        r.setGate(cfgGate);
+        r.setGate(enabledGate());
 
         Response resp = r.replayByTimeWindow(req);
         assertEquals(400, resp.getStatus());
@@ -291,38 +257,32 @@ public class ReplayResourceTest {
     }
 
     @Test
-    public void replayByTimeObjectKey_badRequest_when_objectKey_missing_and_doesNotCallService() {
+    public void replayByIngestion_badRequest_when_ingestionId_missing_and_doesNotCallService() {
         ReplayRequest req = mock(ReplayRequest.class);
 
-        ConfigGate cfgGate = enabledGate();
-
-        when(req.stream()).thenReturn("ingestion");
         when(req.reason()).thenReturn("it-test");
-        when(req.objectKey()).thenReturn("   "); // missing
+        when(req.ingestionId()).thenReturn("   "); // missing
 
         ReplayService svc = mock(ReplayService.class);
 
         ReplayResource r = new ReplayResource();
         r.setService(svc);
-        r.setGate(cfgGate);
+        r.setGate(enabledGate());
 
-        Response resp = r.replayByTimeObjectKey(req);
+        Response resp = r.replayByIngestion(req);
         assertEquals(400, resp.getStatus());
 
         ReplayResult actual = entity(resp);
         assertFalse(actual.ok());
-        assertEquals("DD-REPLAY-bad_request-objectKey_missing", actual.reason());
+        assertEquals("DD-REPLAY-bad_request-ingestionId_missing", actual.reason());
 
         verifyNoInteractions(svc);
     }
 
     @Test
-    public void replayByDomainDlqId_badRequest_when_dlqId_missing_and_doesNotCallService() {
+    public void replayByDomainDlq_badRequest_when_dlqId_missing_and_doesNotCallService() {
         ReplayRequest req = mock(ReplayRequest.class);
 
-        ConfigGate cfgGate = enabledGate();
-
-        when(req.stream()).thenReturn("ingestion");
         when(req.reason()).thenReturn("it-test");
         when(req.dlqId()).thenReturn("   "); // missing
 
@@ -330,9 +290,9 @@ public class ReplayResourceTest {
 
         ReplayResource r = new ReplayResource();
         r.setService(svc);
-        r.setGate(cfgGate);
+        r.setGate(enabledGate());
 
-        Response resp = r.replayByDomainDlqId(req);
+        Response resp = r.replayByDomainDlq(req);
         assertEquals(400, resp.getStatus());
 
         ReplayResult actual = entity(resp);
@@ -343,12 +303,9 @@ public class ReplayResourceTest {
     }
 
     @Test
-    public void replayBySystemDlqId_badRequest_when_dlqId_missing_and_doesNotCallService() {
+    public void replayBySystemDlq_badRequest_when_dlqId_missing_and_doesNotCallService() {
         ReplayRequest req = mock(ReplayRequest.class);
 
-        ConfigGate cfgGate = enabledGate();
-
-        when(req.stream()).thenReturn("ingestion");
         when(req.reason()).thenReturn("it-test");
         when(req.dlqId()).thenReturn("   "); // missing
 
@@ -356,38 +313,20 @@ public class ReplayResourceTest {
 
         ReplayResource r = new ReplayResource();
         r.setService(svc);
-        r.setGate(cfgGate);
+        r.setGate(enabledGate());
 
-        Response resp = r.replayBySystemDlqId(req);
+        Response resp = r.replayBySystemDlq(req);
         assertEquals(400, resp.getStatus());
 
         ReplayResult actual = entity(resp);
         assertFalse(actual.ok());
         assertEquals("DD-REPLAY-bad_request-dlqId_missing", actual.reason());
-
-        verifyNoInteractions(svc);
-    }
-
-    @Test
-    public void replayByTimeObjectKey_returns_409_when_disabled_andDoesNotCallService() {
-        ReplayRequest req = mock(ReplayRequest.class);
-
-        ReplayService svc = mock(ReplayService.class);
-
-        ReplayResource r = new ReplayResource();
-        r.setService(svc);
-        r.setGate(disabledGate());
-
-        Response resp = r.replayByTimeObjectKey(req);
-        assertEquals(400, resp.getStatus());
-
-        ReplayResult actual = entity(resp);
-        assertFalse(actual.ok());
-        assertEquals("DD-CONFIG-replay_disabled", actual.reason());
 
         verifyNoInteractions(svc);
     }
 }
+
+
 
 
 

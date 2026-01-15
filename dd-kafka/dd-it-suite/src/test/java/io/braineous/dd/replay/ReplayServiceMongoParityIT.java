@@ -58,7 +58,6 @@ public class ReplayServiceMongoParityIT {
 
         ReplayRequest req = new ReplayRequest();
         req.setDlqId("DLQ-A");
-        req.setStream("ingestion");
         req.setReason("ingestion");
 
         // -------- act --------

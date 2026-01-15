@@ -10,6 +10,7 @@ import jakarta.ws.rs.POST;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.MediaType;
+import jakarta.ws.rs.core.Response;
 
 @Path("/api/replay")
 @Consumes(MediaType.APPLICATION_JSON)
@@ -22,93 +23,136 @@ public class ReplayResource {
     @Inject
     ConfigGate gate;
 
-    // test seam (same idea as ReplayService.setStore)
-    void setService(ReplayService svc){
+    // test seams
+    void setService(ReplayService svc) {
         this.service = svc;
     }
 
-    void setGate(ConfigGate gate){
+    void setGate(ConfigGate gate) {
         this.gate = gate;
     }
 
+    // -------------------------------------------------------------------------
+    // Endpoints
+    // -------------------------------------------------------------------------
+
     @POST
     @Path("/time-window")
-    public jakarta.ws.rs.core.Response replayByTimeWindow(ReplayRequest request){
-        if(!gate.on("dd.feature.replay.enabled"))
-            return jakarta.ws.rs.core.Response.status(jakarta.ws.rs.core.Response.Status.BAD_REQUEST)
-                    .entity(ReplayResult.fail("DD-CONFIG-replay_disabled"))
-                    .build();
+    public Response replayByTimeWindow(ReplayRequest request) {
+
+        Response disabled = replayDisabledIfOff();
+        if (disabled != null) return disabled;
 
         ReplayResult bad = validateTimeWindow(request);
-        if (bad != null)
-            return jakarta.ws.rs.core.Response.status(jakarta.ws.rs.core.Response.Status.BAD_REQUEST)
-                    .entity(bad)
-                    .build();
+        if (bad != null) return Response.status(Response.Status.BAD_REQUEST).entity(bad).build();
 
-        return jakarta.ws.rs.core.Response.ok(service.replayByTimeWindow(request)).build();
+        // normalize before passing down (boring safety)
+        try { request.normalize(); } catch (Exception ignored) { }
+
+        ReplayResult out = service.replayByTimeWindow(request);
+        return toHttp(out);
     }
 
     @POST
-    @Path("/time-object-key")
-    public jakarta.ws.rs.core.Response replayByTimeObjectKey(ReplayRequest request){
-        if(!gate.on("dd.feature.replay.enabled"))
-            return jakarta.ws.rs.core.Response.status(jakarta.ws.rs.core.Response.Status.BAD_REQUEST)
-                    .entity(ReplayResult.fail("DD-CONFIG-replay_disabled"))
-                    .build();
+    @Path("/ingestion")
+    public Response replayByIngestion(ReplayRequest request) {
 
-        ReplayResult bad = validateObjectKey(request);
-        if (bad != null)
-            return jakarta.ws.rs.core.Response.status(jakarta.ws.rs.core.Response.Status.BAD_REQUEST)
-                    .entity(bad)
-                    .build();
+        Response disabled = replayDisabledIfOff();
+        if (disabled != null) return disabled;
 
-        return jakarta.ws.rs.core.Response.ok(service.replayByTimeObjectKey(request)).build();
+        ReplayResult bad = validateIngestionId(request);
+        if (bad != null) return Response.status(Response.Status.BAD_REQUEST).entity(bad).build();
+
+        try { request.normalize(); } catch (Exception ignored) { }
+
+        // same underlying behavior as prior "timeObjectKey", but selector is ingestionId now
+        ReplayResult out = service.replayByTimeObjectKey(request);
+        return toHttp(out);
     }
 
     @POST
-    @Path("/domain-dlq-id")
-    public jakarta.ws.rs.core.Response replayByDomainDlqId(ReplayRequest request){
-        if(!gate.on("dd.feature.replay.enabled"))
-            return jakarta.ws.rs.core.Response.status(jakarta.ws.rs.core.Response.Status.BAD_REQUEST)
-                    .entity(ReplayResult.fail("DD-CONFIG-replay_disabled"))
-                    .build();
+    @Path("/dlq/domain")
+    public Response replayByDomainDlq(ReplayRequest request) {
+
+        Response disabled = replayDisabledIfOff();
+        if (disabled != null) return disabled;
 
         ReplayResult bad = validateDlqId(request);
-        if (bad != null)
-            return jakarta.ws.rs.core.Response.status(jakarta.ws.rs.core.Response.Status.BAD_REQUEST)
-                    .entity(bad)
-                    .build();
+        if (bad != null) return Response.status(Response.Status.BAD_REQUEST).entity(bad).build();
 
-        return jakarta.ws.rs.core.Response.ok(service.replayByDomainDlqId(request)).build();
+        try { request.normalize(); } catch (Exception ignored) { }
+
+        ReplayResult out = service.replayByDomainDlqId(request);
+        return toHttp(out);
     }
 
     @POST
-    @Path("/system-dlq-id")
-    public jakarta.ws.rs.core.Response replayBySystemDlqId(ReplayRequest request){
-        if(!gate.on("dd.feature.replay.enabled"))
-            return jakarta.ws.rs.core.Response.status(jakarta.ws.rs.core.Response.Status.BAD_REQUEST)
-                    .entity(ReplayResult.fail("DD-CONFIG-replay_disabled"))
-                    .build();
+    @Path("/dlq/system")
+    public Response replayBySystemDlq(ReplayRequest request) {
+
+        Response disabled = replayDisabledIfOff();
+        if (disabled != null) return disabled;
 
         ReplayResult bad = validateDlqId(request);
-        if (bad != null)
-            return jakarta.ws.rs.core.Response.status(jakarta.ws.rs.core.Response.Status.BAD_REQUEST)
-                    .entity(bad)
-                    .build();
+        if (bad != null) return Response.status(Response.Status.BAD_REQUEST).entity(bad).build();
 
-        return jakarta.ws.rs.core.Response.ok(service.replayBySystemDlqId(request)).build();
+        try { request.normalize(); } catch (Exception ignored) { }
+
+        ReplayResult out = service.replayBySystemDlqId(request);
+        return toHttp(out);
     }
 
-    //-------Validators --------------------------
+    // -------------------------------------------------------------------------
+    // Gate + HTTP mapping
+    // -------------------------------------------------------------------------
+
+    private Response replayDisabledIfOff() {
+        if (!gate.on("dd.feature.replay.enabled")) {
+            return Response.status(Response.Status.FORBIDDEN)
+                    .entity(ReplayResult.fail("DD-CONFIG-replay_disabled"))
+                    .build();
+        }
+        return null;
+    }
+
+    private Response toHttp(ReplayResult r) {
+
+        if (r == null) {
+            return Response.serverError()
+                    .entity(ReplayResult.fail("DD-REPLAY-null_result"))
+                    .build();
+        }
+
+        if (r.ok()) {
+            return Response.ok(r).build();
+        }
+
+        // Keep API boring: bad_request stays 400, everything else is 500.
+        String reason = safeReason(r);
+        if (reason != null && reason.startsWith("DD-REPLAY-bad_request-")) {
+            return Response.status(Response.Status.BAD_REQUEST).entity(r).build();
+        }
+
+        return Response.serverError().entity(r).build();
+    }
+
+    private String safeReason(ReplayResult r) {
+        try {
+            return r.reason();
+        } catch (Exception ignored) {
+            return null;
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // Validators
+    // -------------------------------------------------------------------------
+
     private ReplayResult validateCommon(ReplayRequest req) {
         if (req == null) return ReplayResult.badRequest("DD-REPLAY-bad_request-null");
 
-        String stream = req.stream();
+        // stream removed from API contract: do NOT validate it anymore
         String reason = req.reason();
-
-        if (stream == null || stream.trim().isEmpty())
-            return ReplayResult.badRequest("DD-REPLAY-bad_request-stream_missing");
-
         if (reason == null || reason.trim().isEmpty())
             return ReplayResult.badRequest("DD-REPLAY-bad_request-reason_missing");
 
@@ -120,14 +164,17 @@ public class ReplayResource {
         if (common != null) return common;
 
         String from = req.fromTime();
-        String to   = req.toTime();
+        String to = req.toTime();
 
-        if (from == null || from.trim().isEmpty())
+        from = (from == null) ? null : from.trim();
+        to = (to == null) ? null : to.trim();
+
+        if (from == null || from.isEmpty())
             return ReplayResult.badRequest("DD-REPLAY-bad_request-fromTime_missing");
-        if (to == null || to.trim().isEmpty())
+        if (to == null || to.isEmpty())
             return ReplayResult.badRequest("DD-REPLAY-bad_request-toTime_missing");
 
-        // optional: parse check at API surface (keeps store boring)
+        // parse check at API surface (keeps store boring)
         try {
             java.time.Instant f = java.time.Instant.parse(from);
             java.time.Instant t = java.time.Instant.parse(to);
@@ -139,13 +186,13 @@ public class ReplayResource {
         return null;
     }
 
-    private ReplayResult validateObjectKey(ReplayRequest req) {
+    private ReplayResult validateIngestionId(ReplayRequest req) {
         ReplayResult common = validateCommon(req);
         if (common != null) return common;
 
-        String key = req.objectKey();
-        if (key == null || key.trim().isEmpty())
-            return ReplayResult.badRequest("DD-REPLAY-bad_request-objectKey_missing");
+        String id = req.ingestionId();
+        if (id == null || id.trim().isEmpty())
+            return ReplayResult.badRequest("DD-REPLAY-bad_request-ingestionId_missing");
 
         return null;
     }
@@ -161,5 +208,6 @@ public class ReplayResource {
         return null;
     }
 }
+
 
 

@@ -1,11 +1,10 @@
 package io.braineous.dd.replay;
 
 import ai.braineous.cgo.config.ConfigService;
-
-
-import io.braineous.dd.ingestion.persistence.MongoIngestionStore;
 import io.braineous.dd.core.config.DDConfigService;
-
+import io.braineous.dd.ingestion.persistence.MongoIngestionStore;
+import org.bson.Document;
+import org.hamcrest.Matchers;
 
 @io.quarkus.test.junit.QuarkusTest
 public class ReplayResourceHttpIT {
@@ -24,15 +23,14 @@ public class ReplayResourceHttpIT {
     }
 
     @org.junit.jupiter.api.Test
-    void http_timeWindow_badRequest_when_stream_missing_returns400() {
+    void http_timeWindow_badRequest_when_reason_missing_returns400() {
 
         ConfigService cfgSvc = new DDConfigService().configService();
         cfgSvc.setProperty("dd.feature.replay.enabled", "true");
 
         String reqJson = """
         {
-          "stream": "   ",
-          "reason": "it-test",
+          "reason": "   ",
           "fromTime": "2026-01-07T00:00:00Z",
           "toTime":   "2026-01-07T01:00:00Z"
         }
@@ -47,10 +45,10 @@ public class ReplayResourceHttpIT {
                 .post("/api/replay/time-window")
                 .then()
                 .statusCode(400)
-                .body("ok", org.hamcrest.Matchers.equalTo(false))
-                .body("reason", org.hamcrest.Matchers.equalTo("DD-REPLAY-bad_request-stream_missing"))
-                .body("matchedCount", org.hamcrest.Matchers.equalTo(0))
-                .body("replayedCount", org.hamcrest.Matchers.equalTo(0));
+                .body("ok", Matchers.equalTo(false))
+                .body("reason", Matchers.equalTo("DD-REPLAY-bad_request-reason_missing"))
+                .body("matchedCount", Matchers.equalTo(0))
+                .body("replayedCount", Matchers.equalTo(0));
     }
 
     @org.junit.jupiter.api.Test
@@ -59,7 +57,7 @@ public class ReplayResourceHttpIT {
         ConfigService cfgSvc = new DDConfigService().configService();
         cfgSvc.setProperty("dd.feature.replay.enabled", "true");
 
-        com.mongodb.client.MongoCollection<org.bson.Document> col = mongoClient
+        com.mongodb.client.MongoCollection<Document> col = mongoClient
                 .getDatabase(MongoIngestionStore.DB)
                 .getCollection(MongoIngestionStore.COL);
 
@@ -82,7 +80,7 @@ public class ReplayResourceHttpIT {
         }
         """;
 
-        col.insertOne(new org.bson.Document()
+        col.insertOne(new Document()
                 .append("ingestionId", "SEED-1")
                 .append("payload", ddEventJson)
                 .append("createdAt", java.util.Date.from(seedAt))
@@ -95,7 +93,6 @@ public class ReplayResourceHttpIT {
 
         String reqJson = """
         {
-          "stream": "ingestion",
           "reason": "it-test",
           "fromTime": "%s",
           "toTime":   "%s"
@@ -111,16 +108,142 @@ public class ReplayResourceHttpIT {
                 .post("/api/replay/time-window")
                 .then()
                 .statusCode(200)
-                .body("ok", org.hamcrest.Matchers.equalTo(true))
-                .body("reason", org.hamcrest.Matchers.nullValue())
-                .body("replayId", org.hamcrest.Matchers.notNullValue())
-                .body("matchedCount", org.hamcrest.Matchers.equalTo(1))
+                .body("ok", Matchers.equalTo(true))
+                .body("reason", Matchers.nullValue())
+                .body("replayId", Matchers.notNullValue())
+                .body("matchedCount", Matchers.equalTo(1))
                 // transport may or may not be wired in this IT; accept either
-                .body("replayedCount", org.hamcrest.Matchers.anyOf(
-                        org.hamcrest.Matchers.equalTo(0),
-                        org.hamcrest.Matchers.equalTo(1)
+                .body("replayedCount", Matchers.anyOf(
+                        Matchers.equalTo(0),
+                        Matchers.equalTo(1)
                 ));
     }
+
+    @org.junit.jupiter.api.Test
+    void http_ingestion_badRequest_when_ingestionId_missing_returns400() {
+
+        ConfigService cfgSvc = new DDConfigService().configService();
+        cfgSvc.setProperty("dd.feature.replay.enabled", "true");
+
+        String reqJson = """
+        {
+          "reason": "it-test",
+          "ingestionId": "   "
+        }
+        """;
+
+        io.restassured.RestAssured
+                .given()
+                .contentType("application/json")
+                .accept("application/json")
+                .body(reqJson)
+                .when()
+                .post("/api/replay/ingestion")
+                .then()
+                .statusCode(400)
+                .body("ok", Matchers.equalTo(false))
+                .body("reason", Matchers.equalTo("DD-REPLAY-bad_request-ingestionId_missing"))
+                .body("matchedCount", Matchers.equalTo(0))
+                .body("replayedCount", Matchers.equalTo(0));
+    }
+
+    @org.junit.jupiter.api.Test
+    void http_dlqDomain_badRequest_when_dlqId_missing_returns400() {
+
+        ConfigService cfgSvc = new DDConfigService().configService();
+        cfgSvc.setProperty("dd.feature.replay.enabled", "true");
+
+        String reqJson = """
+        {
+          "reason": "it-test",
+          "dlqId": "   "
+        }
+        """;
+
+        io.restassured.RestAssured
+                .given()
+                .contentType("application/json")
+                .accept("application/json")
+                .body(reqJson)
+                .when()
+                .post("/api/replay/dlq/domain")
+                .then()
+                .statusCode(400)
+                .body("ok", Matchers.equalTo(false))
+                .body("reason", Matchers.equalTo("DD-REPLAY-bad_request-dlqId_missing"))
+                .body("matchedCount", Matchers.equalTo(0))
+                .body("replayedCount", Matchers.equalTo(0));
+    }
+
+    @org.junit.jupiter.api.Test
+    void http_dlqSystem_badRequest_when_dlqId_missing_returns400() {
+
+        ConfigService cfgSvc = new DDConfigService().configService();
+        cfgSvc.setProperty("dd.feature.replay.enabled", "true");
+
+        String reqJson = """
+        {
+          "reason": "it-test",
+          "dlqId": "   "
+        }
+        """;
+
+        io.restassured.RestAssured
+                .given()
+                .contentType("application/json")
+                .accept("application/json")
+                .body(reqJson)
+                .when()
+                .post("/api/replay/dlq/system")
+                .then()
+                .statusCode(400)
+                .body("ok", Matchers.equalTo(false))
+                .body("reason", Matchers.equalTo("DD-REPLAY-bad_request-dlqId_missing"))
+                .body("matchedCount", Matchers.equalTo(0))
+                .body("replayedCount", Matchers.equalTo(0));
+    }
+
+    @org.junit.jupiter.api.Test
+    void http_timeWindow_returns403_when_disabled() {
+
+        // Force-disable at JVM level so the running app's gate sees it
+        String key = "dd.feature.replay.enabled";
+        String prev = System.getProperty(key);
+        System.setProperty(key, "false");
+
+        try {
+            String reqJson = """
+        {
+          "reason": "it-test",
+          "fromTime": "2026-01-07T00:00:00Z",
+          "toTime":   "2026-01-07T01:00:00Z"
+        }
+        """;
+
+            io.restassured.RestAssured
+                    .given()
+                    .contentType("application/json")
+                    .accept("application/json")
+                    .body(reqJson)
+                    .when()
+                    .post("/api/replay/time-window")
+                    .then()
+                    .statusCode(403)
+                    .body("ok", org.hamcrest.Matchers.equalTo(false))
+                    .body("reason", org.hamcrest.Matchers.equalTo("DD-CONFIG-replay_disabled"))
+                    .body("matchedCount", org.hamcrest.Matchers.equalTo(0))
+                    .body("replayedCount", org.hamcrest.Matchers.equalTo(0));
+
+        } finally {
+            // restore prior value
+            if (prev == null) {
+                System.clearProperty(key);
+            } else {
+                System.setProperty(key, prev);
+            }
+        }
+    }
+
 
     // ---------------- helpers ----------------
 
@@ -130,6 +253,7 @@ public class ReplayResourceHttpIT {
                 .drop();
     }
 }
+
 
 
 
