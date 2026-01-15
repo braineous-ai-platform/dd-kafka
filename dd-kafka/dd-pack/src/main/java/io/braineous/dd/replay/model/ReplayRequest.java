@@ -45,6 +45,23 @@ public class ReplayRequest {
     public String objectKey() { return objectKey; }
     public String dlqId() { return dlqId; }
     public String reason() { return reason; }
+
+    //-----------------------------------------------
+    public void normalize() {
+        this.stream = trimToNull(this.stream);
+        this.fromTime = trimToNull(this.fromTime);
+        this.toTime = trimToNull(this.toTime);
+        this.objectKey = trimToNull(this.objectKey);
+        this.dlqId = trimToNull(this.dlqId);
+        this.reason = trimToNull(this.reason);
+    }
+
+    private static String trimToNull(String s) {
+        if (s == null) return null;
+        String t = s.trim();
+        if (t.length() == 0) return null;
+        return t;
+    }
 }
 
 

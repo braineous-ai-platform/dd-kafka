@@ -4,30 +4,52 @@ public class ReplayResult {
 
     private boolean ok;
     private String replayId;
+
+    // NOTE: replayedCount == attempted handoffs to ProcessorOrchestrator (NOT "anchored" writes)
     private int replayedCount;
+
     private int matchedCount;
-    private String reason;   // error / disabled / bad request
+
+    // error / disabled / bad request
+    private String reason;
+
+    // replayId must be collision-safe
+    private static final java.util.concurrent.atomic.AtomicLong REPLAY_SEQ =
+            new java.util.concurrent.atomic.AtomicLong();
 
     // Jackson + factory-only usage
     private ReplayResult() {}
 
     // ---------- factories ----------
 
+    private static String nextReplayId() {
+        long seq = REPLAY_SEQ.incrementAndGet();
+        return "REPLAY-" + System.currentTimeMillis() + "-" + seq;
+    }
+
     public static ReplayResult ok(ReplayRequest req, int replayed, int matched) {
         ReplayResult r = new ReplayResult();
         r.ok = true;
-        r.replayId = "REPLAY-" + System.currentTimeMillis();
+        r.replayId = nextReplayId();
         r.replayedCount = replayed;
         r.matchedCount = matched;
+
+        // invariant: ok=true => reason must be null
+        r.reason = null;
+
         return r;
     }
 
     public static ReplayResult empty(ReplayRequest req) {
         ReplayResult r = new ReplayResult();
         r.ok = true;
-        r.replayId = "REPLAY-" + System.currentTimeMillis();
+        r.replayId = nextReplayId();
         r.replayedCount = 0;
         r.matchedCount = 0;
+
+        // invariant: ok=true => reason must be null
+        r.reason = null;
+
         return r;
     }
 
@@ -35,6 +57,12 @@ public class ReplayResult {
         ReplayResult r = new ReplayResult();
         r.ok = false;
         r.reason = reason;
+
+        // invariant: ok=false => no replayId + zero counts
+        r.replayId = null;
+        r.replayedCount = 0;
+        r.matchedCount = 0;
+
         return r;
     }
 
@@ -42,6 +70,12 @@ public class ReplayResult {
         ReplayResult r = new ReplayResult();
         r.ok = false;
         r.reason = reason;
+
+        // invariant: ok=false => no replayId + zero counts
+        r.replayId = null;
+        r.replayedCount = 0;
+        r.matchedCount = 0;
+
         return r;
     }
 
@@ -77,6 +111,7 @@ public class ReplayResult {
     public int matchedCount() { return matchedCount; }
     public String reason() { return reason; }
 }
+
 
 
 

@@ -11,57 +11,66 @@ import org.bson.Document;
 
 import java.util.List;
 
-@ApplicationScoped
-public class MongoReplayStore implements ReplayStore{
+@jakarta.enterprise.context.ApplicationScoped
+public class MongoReplayStore implements ReplayStore {
 
     public static final String DB  = "dd";
     public static final String INGESTION_COL = "ingestion";
 
-    @Inject
-    MongoClient mongoClient;
+    @jakarta.inject.Inject
+    com.mongodb.client.MongoClient mongoClient;
 
-    private MongoCollection<Document> collection() {
+    private com.mongodb.client.MongoCollection<org.bson.Document> collection() {
         return mongoClient
                 .getDatabase(DB)
                 .getCollection(INGESTION_COL);
     }
 
+    private com.mongodb.client.MongoCollection<org.bson.Document> domainDlqCol() {
+        return mongoClient
+                .getDatabase(DB)
+                .getCollection("dlq_domain");
+    }
+
+    private com.mongodb.client.MongoCollection<org.bson.Document> systemDlqCol() {
+        return mongoClient
+                .getDatabase(DB)
+                .getCollection("dlq_system");
+    }
+
 
     @Override
-    public List<ReplayEvent> findByTimeWindow(ReplayRequest request) {
+    public java.util.List<ReplayEvent> findByTimeWindow(ReplayRequest request) {
 
         Console.log("REPLAY_STORE_IMPL", this.getClass().getName());
 
-        // window semantics: [from, to)  (to is exclusive)
-        if (request == null) return List.of();
+        if (request == null) return java.util.Collections.emptyList();
 
         final java.time.Instant from;
         final java.time.Instant to;
 
         try {
-            // NOTE: trim() MUST be applied before Instant.parse(), else trailing whitespace/newlines break parsing
             String fromS = request.fromTime();
             String toS   = request.toTime();
 
-            if (fromS == null) return List.of();
-            if (toS == null)   return List.of();
+            if (fromS == null) return java.util.Collections.emptyList();
+            if (toS == null)   return java.util.Collections.emptyList();
 
             fromS = fromS.trim();
             toS   = toS.trim();
 
-            if (fromS.isEmpty()) return List.of();
-            if (toS.isEmpty())   return List.of();
+            if (fromS.length() == 0) return java.util.Collections.emptyList();
+            if (toS.length() == 0)   return java.util.Collections.emptyList();
 
             from = java.time.Instant.parse(fromS);
             to   = java.time.Instant.parse(toS);
         } catch (Exception e) {
             Console.log("REPLAY_TIMEWINDOW_PARSE_FAIL", String.valueOf(e));
-            return List.of();
+            return java.util.Collections.emptyList();
         }
 
-        if (!from.isBefore(to)) return List.of();
+        if (!from.isBefore(to)) return java.util.Collections.emptyList();
 
-        // dump exact query bounds + target
         Console.log("REPLAY_QUERY_DUMP",
                 "db=" + DB +
                         " col=" + INGESTION_COL +
@@ -71,123 +80,182 @@ public class MongoReplayStore implements ReplayStore{
                         " toDate=" + java.util.Date.from(to)
         );
 
-        var filter = com.mongodb.client.model.Filters.and(
+        org.bson.conversions.Bson filter = com.mongodb.client.model.Filters.and(
                 com.mongodb.client.model.Filters.gte("createdAt", java.util.Date.from(from)),
                 com.mongodb.client.model.Filters.lt("createdAt", java.util.Date.from(to))
         );
 
-        var sort = com.mongodb.client.model.Sorts.ascending("createdAt", "_id");
+        org.bson.conversions.Bson sort = com.mongodb.client.model.Sorts.ascending("createdAt", "_id");
 
-        java.util.ArrayList<ReplayEvent> out = new java.util.ArrayList<>();
-        for (Document d : collection().find(filter).sort(sort)) {
-            out.add(mapDocToReplayEvent(d));
+        java.util.ArrayList<ReplayEvent> out = new java.util.ArrayList<ReplayEvent>();
+        for (org.bson.Document d : collection().find(filter).sort(sort)) {
+            ReplayEvent ev = safeMapDocToReplayEvent(d);
+            if (ev != null) {
+                out.add(ev);
+            }
         }
 
-        Console.log("REPLAY_MATCHED_COUNT", out.size());
-        Console.log("REPLAY_MONGO_COUNT", collection().countDocuments(filter));
+        Console.log("REPLAY_MATCHED_COUNT", Integer.valueOf(out.size()));
+        Console.log("REPLAY_MONGO_COUNT", Long.valueOf(collection().countDocuments(filter)));
 
-        return java.util.List.copyOf(out);
+        return java.util.Collections.unmodifiableList(out);
     }
 
-
     @Override
-    public List<ReplayEvent> findByTimeObjectKey(ReplayRequest request) {
+    public java.util.List<ReplayEvent> findByTimeObjectKey(ReplayRequest request) {
 
-        if (request == null) return List.of();
+        if (request == null) return java.util.Collections.emptyList();
 
         final String key;
         try {
             key = request.objectKey();
         } catch (Exception e) {
-            return List.of();
+            return java.util.Collections.emptyList();
         }
 
-        if (key == null || key.trim().isEmpty()) return List.of();
+        if (key == null || key.trim().length() == 0) return java.util.Collections.emptyList();
 
         try {
-            var filter = com.mongodb.client.model.Filters.eq("ingestionId", key.trim());
-            var sort   = com.mongodb.client.model.Sorts.ascending("createdAt", "_id");
+            org.bson.conversions.Bson filter = com.mongodb.client.model.Filters.eq("ingestionId", key.trim());
+            org.bson.conversions.Bson sort   = com.mongodb.client.model.Sorts.ascending("createdAt", "_id");
 
-            java.util.ArrayList<ReplayEvent> out = new java.util.ArrayList<>();
+            java.util.ArrayList<ReplayEvent> out = new java.util.ArrayList<ReplayEvent>();
             for (org.bson.Document d : collection().find(filter).sort(sort)) {
-                out.add(mapDocToReplayEvent(d));
+                ReplayEvent ev = safeMapDocToReplayEvent(d);
+                if (ev != null) {
+                    out.add(ev);
+                }
             }
-            return java.util.List.copyOf(out);
+            return java.util.Collections.unmodifiableList(out);
         } catch (Exception e) {
-            return List.of();
+            return java.util.Collections.emptyList();
         }
     }
 
-    @Override
-    public List<ReplayEvent> findByDomainDlqId(ReplayRequest request) {
 
-        if (request == null) return List.of();
+    @Override
+    public java.util.List<ReplayEvent> findByDomainDlqId(ReplayRequest request) {
+
+        if (request == null) return java.util.Collections.emptyList();
 
         final String dlqId;
         try {
             dlqId = request.dlqId();
         } catch (Exception e) {
-            return List.of();
+            return java.util.Collections.emptyList();
         }
 
-        if (dlqId == null || dlqId.trim().isEmpty()) return List.of();
+        if (dlqId == null || dlqId.trim().length() == 0) {
+            return java.util.Collections.emptyList();
+        }
 
         try {
-            var filter = com.mongodb.client.model.Filters.eq("dlqId", dlqId.trim());
-            var sort   = com.mongodb.client.model.Sorts.ascending("createdAt", "_id");
+            org.bson.conversions.Bson filter =
+                    com.mongodb.client.model.Filters.eq("dlqId", dlqId.trim());
+            org.bson.conversions.Bson sort =
+                    com.mongodb.client.model.Sorts.ascending("createdAt", "_id");
 
-            java.util.ArrayList<ReplayEvent> out = new java.util.ArrayList<>();
-            for (org.bson.Document d : collection().find(filter).sort(sort)) {
-                out.add(mapDocToReplayEvent(d));
+            java.util.ArrayList<ReplayEvent> out = new java.util.ArrayList<ReplayEvent>();
+            for (org.bson.Document d : domainDlqCol().find(filter).sort(sort)) {
+                ReplayEvent ev = safeMapDocToReplayEvent(d);
+                if (ev != null) {
+                    out.add(ev);
+                }
             }
-            return java.util.List.copyOf(out);
+            return java.util.Collections.unmodifiableList(out);
         } catch (Exception e) {
-            return List.of();
+            return java.util.Collections.emptyList();
         }
     }
 
     @Override
-    public List<ReplayEvent> findBySystemDlqId(ReplayRequest request) {
+    public java.util.List<ReplayEvent> findBySystemDlqId(ReplayRequest request) {
 
-        if (request == null) return List.of();
+        if (request == null) return java.util.Collections.emptyList();
 
         final String dlqId;
         try {
             dlqId = request.dlqId();
         } catch (Exception e) {
-            return List.of();
+            return java.util.Collections.emptyList();
         }
 
-        if (dlqId == null || dlqId.trim().isEmpty()) return List.of();
+        if (dlqId == null || dlqId.trim().length() == 0) {
+            return java.util.Collections.emptyList();
+        }
 
         try {
-            var filter = com.mongodb.client.model.Filters.eq("dlqId", dlqId.trim());
-            var sort   = com.mongodb.client.model.Sorts.ascending("createdAt", "_id");
+            org.bson.conversions.Bson filter =
+                    com.mongodb.client.model.Filters.eq("dlqId", dlqId.trim());
+            org.bson.conversions.Bson sort =
+                    com.mongodb.client.model.Sorts.ascending("createdAt", "_id");
 
-            java.util.ArrayList<ReplayEvent> out = new java.util.ArrayList<>();
-            for (org.bson.Document d : collection().find(filter).sort(sort)) {
-                out.add(mapDocToReplayEvent(d));
+            java.util.ArrayList<ReplayEvent> out = new java.util.ArrayList<ReplayEvent>();
+            for (org.bson.Document d : systemDlqCol().find(filter).sort(sort)) {
+                ReplayEvent ev = safeMapDocToReplayEvent(d);
+                if (ev != null) {
+                    out.add(ev);
+                }
             }
-            return java.util.List.copyOf(out);
+            return java.util.Collections.unmodifiableList(out);
         } catch (Exception e) {
-            return List.of();
+            return java.util.Collections.emptyList();
         }
     }
 
-    //----------helpers----------------------------------
-    private ReplayEvent mapDocToReplayEvent(org.bson.Document d) {
+
+    //------------------------------------------------------------------------------
+    private ReplayEvent safeMapDocToReplayEvent(org.bson.Document d) {
+
         if (d == null) {
             return null;
         }
 
-        String id = d.getString("ingestionId");
-        String payload = d.getString("payload");
+        String id = null;
+        String payload = null;
+        java.time.Instant ts = null;
 
-        java.util.Date createdAt = d.getDate("createdAt");
-        java.time.Instant ts = (createdAt == null)
-                ? null
-                : createdAt.toInstant();
+        try {
+            Object oid = d.get("_id");
+            if (oid != null) {
+                id = String.valueOf(oid);
+            }
+        } catch (Exception ignored) {
+            // ignore
+        }
+
+        if (id == null) {
+            try {
+                Object ingestionIdObj = d.get("ingestionId");
+                if (ingestionIdObj != null) {
+                    id = String.valueOf(ingestionIdObj);
+                }
+            } catch (Exception ignored) {
+                // ignore
+            }
+        }
+
+        try {
+            Object payloadObj = d.get("payload");
+            if (payloadObj != null) {
+                payload = String.valueOf(payloadObj);
+            }
+        } catch (Exception ignored) {
+            // ignore
+        }
+
+        try {
+            Object createdAtObj = d.get("createdAt");
+            if (createdAtObj instanceof java.util.Date) {
+                java.util.Date createdAt = (java.util.Date) createdAtObj;
+                ts = createdAt.toInstant();
+            }
+        } catch (Exception ignored) {
+            // ignore
+        }
 
         return new ReplayEvent(id, payload, ts);
     }
 }
+
+
