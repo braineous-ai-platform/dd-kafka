@@ -1,6 +1,7 @@
 package io.braineous.dd.ingestion.persistence;
 
 import ai.braineous.rag.prompt.models.cgo.graph.SnapshotHash;
+import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.mongodb.ErrorCategory;
@@ -252,8 +253,155 @@ public class MongoIngestionStore implements IngestionStore {
         return "DD-ING-" + day + "-" + nano;
     }
 
+    @Override
+    public JsonArray findEventsByTimeWindow(String fromTime, String toTime) {
+
+        JsonArray out = new JsonArray();
+
+        if (fromTime == null || fromTime.trim().isEmpty()) {
+            return out;
+        }
+        if (toTime == null || toTime.trim().isEmpty()) {
+            return out;
+        }
+
+        Instant from;
+        Instant to;
+        try {
+            from = Instant.parse(fromTime.trim());
+            to = Instant.parse(toTime.trim());
+        } catch (Exception ignored) {
+            return out;
+        }
+
+        // If caller violates contract, return empty (store shouldn't throw for query utilities)
+        if (!from.isBefore(to)) {
+            return out;
+        }
+
+        MongoCollection<Document> col = collection();
+
+        try {
+            Date fromDate = Date.from(from);
+            Date toDate = Date.from(to);
+
+            // inclusive from, exclusive to
+            Bson filter = Filters.and(
+                    Filters.gte("createdAt", fromDate),
+                    Filters.lt("createdAt", toDate)
+            );
+
+            com.mongodb.client.FindIterable<Document> it =
+                    col.find(filter).sort(new Document("createdAt", 1));
+
+            com.mongodb.client.MongoCursor<Document> cur = it.iterator();
+
+            try {
+                while (cur.hasNext()) {
+                    Document d = cur.next();
+
+                    JsonObject e = new JsonObject();
+
+                    Object idObj = d.get("ingestionId");
+                    if (idObj != null) {
+                        e.addProperty("ingestionId", String.valueOf(idObj));
+                    }
+
+                    Object createdAtObj = d.get("createdAt");
+                    if (createdAtObj instanceof Date) {
+                        Date dt = (Date) createdAtObj;
+                        e.addProperty("createdAt", dt.toInstant().toString());
+                    }
+
+                    Object snapObj = d.get(F_SNAPSHOT_HASH);
+                    if (snapObj != null) {
+                        e.addProperty(F_SNAPSHOT_HASH, String.valueOf(snapObj));
+                    }
+
+                    Object phObj = d.get(F_PAYLOAD_HASH);
+                    if (phObj != null) {
+                        e.addProperty(F_PAYLOAD_HASH, String.valueOf(phObj));
+                    }
+
+                    Object payloadObj = d.get("payload");
+                    if (payloadObj != null) {
+                        e.addProperty("payload", String.valueOf(payloadObj));
+                    }
+
+                    out.add(e);
+                }
+            } finally {
+                try {
+                    cur.close();
+                } catch (Exception ignored2) {
+                    // deterministic: ignore
+                }
+            }
+
+        } catch (Exception ignored) {
+            // best-effort query utility: swallow and return empty
+            return new JsonArray();
+        }
+
+        return out;
+    }
+
+    @Override
+    public JsonObject findEventsByIngestionId(String ingestionId) {
+
+        JsonObject out = new JsonObject();
+
+        if (ingestionId == null || ingestionId.trim().isEmpty()) {
+            return out;
+        }
+
+        MongoCollection<Document> col = collection();
+
+        try {
+            Bson filter = Filters.eq("ingestionId", ingestionId.trim());
+            Document d = col.find(filter).first();
+
+            if (d == null) {
+                return out;
+            }
+
+            Object idObj = d.get("ingestionId");
+            if (idObj != null) {
+                out.addProperty("ingestionId", String.valueOf(idObj));
+            }
+
+            Object createdAtObj = d.get("createdAt");
+            if (createdAtObj instanceof Date) {
+                Date dt = (Date) createdAtObj;
+                out.addProperty("createdAt", dt.toInstant().toString());
+            }
+
+            Object snapObj = d.get(F_SNAPSHOT_HASH);
+            if (snapObj != null) {
+                out.addProperty(F_SNAPSHOT_HASH, String.valueOf(snapObj));
+            }
+
+            Object phObj = d.get(F_PAYLOAD_HASH);
+            if (phObj != null) {
+                out.addProperty(F_PAYLOAD_HASH, String.valueOf(phObj));
+            }
+
+            Object payloadObj = d.get("payload");
+            if (payloadObj != null) {
+                out.addProperty("payload", String.valueOf(payloadObj));
+            }
+
+            return out;
+
+        } catch (Exception ignored) {
+            // swallow
+            return new JsonObject();
+        }
+    }
 
 
+
+    //------------------------------------------------------------------------------------------------
     private boolean indexBootstrapEnabled() {
         return "true".equalsIgnoreCase(System.getProperty("dd.ingestion.index.bootstrap", "false"));
     }

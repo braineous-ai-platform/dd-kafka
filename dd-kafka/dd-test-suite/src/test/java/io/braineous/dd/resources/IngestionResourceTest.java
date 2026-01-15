@@ -1,277 +1,420 @@
 package io.braineous.dd.resources;
 
 import ai.braineous.rag.prompt.observe.Console;
-import io.braineous.dd.core.processor.HttpPoster;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import io.braineous.dd.processor.ProcessorOrchestrator;
+import io.braineous.dd.processor.ProcessorResult;
+import io.braineous.dd.core.model.Why;
 import io.braineous.dd.replay.model.IngestionRequest;
-import io.quarkus.test.junit.QuarkusTest;
-import jakarta.inject.Inject;
+import io.braineous.dd.ingestion.persistence.IngestionStore;
+import jakarta.ws.rs.core.Response;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 
-@QuarkusTest
+import static org.junit.jupiter.api.Assertions.*;
+
 public class IngestionResourceTest {
 
-    @Inject
     private IngestionResource res;
-
-    @Inject
     private ProcessorOrchestrator orch;
+    private IngestionStore store;
 
+    @BeforeEach
+    void beforeEach() {
+        res = new IngestionResource();
+
+        orch = Mockito.mock(ProcessorOrchestrator.class);
+        store = Mockito.mock(IngestionStore.class);
+
+        set(res, "orch", orch);
+        set(res, "store", store);
+    }
+
+    // ---------------- ingestion() tests ----------------
 
     @Test
-    void http_ingestion_payloadBlank_returns400() {
-        IngestionRequest req = org.mockito.Mockito.mock(IngestionRequest.class);
-        org.mockito.Mockito.when(req.getPayload()).thenReturn("   ");
+    void ingestion_requestNull_returns400_andWhy() {
+        Response resp = res.ingestion(null);
 
-        jakarta.ws.rs.core.Response resp = res.ingestion(req);
+        Console.log("ut_ingestion_requestNull_status", resp.getStatus());
 
-        Console.log("ut_resp_status", resp.getStatus());
+        String json = (String) resp.getEntity();
+        Console.log("ut_ingestion_requestNull_resp", json);
 
+        JsonObject jo = JsonParser.parseString(json).getAsJsonObject();
+        Console.log("ut_ingestion_requestNull_parsed", jo);
+
+        assertEquals(400, resp.getStatus());
+        assertFalse(jo.get("ok").getAsBoolean());
+
+        JsonObject why = jo.get("why").getAsJsonObject();
+        assertEquals("DD-INGEST-request_null", why.get("code").getAsString());
+    }
+
+    @Test
+    void ingestion_payloadBlank_returns400_andWhy() {
+        IngestionRequest req = Mockito.mock(IngestionRequest.class);
+        Mockito.when(req.getPayload()).thenReturn("   ");
+
+        Response resp = res.ingestion(req);
+
+        Console.log("ut_ingestion_payloadBlank_status", resp.getStatus());
+
+        String json = (String) resp.getEntity();
+        Console.log("ut_ingestion_payloadBlank_resp", json);
+
+        JsonObject jo = JsonParser.parseString(json).getAsJsonObject();
+        Console.log("ut_ingestion_payloadBlank_parsed", jo);
+
+        assertEquals(400, resp.getStatus());
+        assertFalse(jo.get("ok").getAsBoolean());
+
+        JsonObject why = jo.get("why").getAsJsonObject();
+        assertEquals("DD-INGEST-payload_blank", why.get("code").getAsString());
+    }
+
+    @Test
+    void ingestion_payloadInvalidJson_returns400_andWhy() {
+        IngestionRequest req = Mockito.mock(IngestionRequest.class);
+        Mockito.when(req.getPayload()).thenReturn("{not-json");
+
+        Response resp = res.ingestion(req);
+
+        Console.log("ut_ingestion_invalidJson_status", resp.getStatus());
+
+        String json = (String) resp.getEntity();
+        Console.log("ut_ingestion_invalidJson_resp", json);
+
+        JsonObject jo = JsonParser.parseString(json).getAsJsonObject();
+        Console.log("ut_ingestion_invalidJson_parsed", jo);
+
+        assertEquals(400, resp.getStatus());
+
+        JsonObject why = jo.get("why").getAsJsonObject();
+        assertEquals("DD-INGEST-payload_invalid_json", why.get("code").getAsString());
+    }
+
+    @Test
+    void ingestion_orchOkTrue_returns200_andEnvelopeOkTrue() {
+        IngestionRequest req = Mockito.mock(IngestionRequest.class);
+        Mockito.when(req.getPayload()).thenReturn("{\"a\":1}");
+
+        JsonObject ddEvent = new JsonObject();
+        ddEvent.addProperty("x", "y");
+
+        ProcessorResult pr = ProcessorResult.ok(ddEvent);
+        pr.setIngestionId("ING-1");
+        pr.setId("DD-PR-1");
+
+        Mockito.when(orch.orchestrate(Mockito.any(JsonObject.class))).thenReturn(pr);
+
+        Response resp = res.ingestion(req);
+
+        Console.log("ut_ingestion_okTrue_status", resp.getStatus());
+
+        String json = (String) resp.getEntity();
+        Console.log("ut_ingestion_okTrue_resp", json);
+
+        JsonObject jo = JsonParser.parseString(json).getAsJsonObject();
+        Console.log("ut_ingestion_okTrue_parsed", jo);
+
+        assertEquals(200, resp.getStatus());
+        assertTrue(jo.get("ok").getAsBoolean());
+
+        JsonObject data = jo.get("data").getAsJsonObject();
+        Console.log("ut_ingestion_okTrue_data", data);
+
+        assertTrue(data.get("ok").getAsBoolean());
+        assertEquals("ING-1", data.get("ingestionId").getAsString());
+        assertTrue(data.get("processorWhy").isJsonNull());
+    }
+
+    @Test
+    void ingestion_orchOkFalse_returns400_andEnvelopeOkFalse() {
+        IngestionRequest req = Mockito.mock(IngestionRequest.class);
+        Mockito.when(req.getPayload()).thenReturn("{\"a\":1}");
+
+        Why why = new Why("DD-DOWNSTREAM-fail", "downstream said no");
+        ProcessorResult pr = ProcessorResult.fail(why);
+        pr.setIngestionId("ING-2");
+        pr.setId("DD-PR-2");
+
+        Mockito.when(orch.orchestrate(Mockito.any(JsonObject.class))).thenReturn(pr);
+
+        Response resp = res.ingestion(req);
+
+        Console.log("ut_ingestion_okFalse_status", resp.getStatus());
+
+        String json = (String) resp.getEntity();
+        Console.log("ut_ingestion_okFalse_resp", json);
+
+        JsonObject jo = JsonParser.parseString(json).getAsJsonObject();
+        Console.log("ut_ingestion_okFalse_parsed", jo);
+
+        assertEquals(400, resp.getStatus());
+        assertFalse(jo.get("ok").getAsBoolean());
+
+        JsonObject data = jo.get("data").getAsJsonObject();
+        Console.log("ut_ingestion_okFalse_data", data);
+
+        JsonObject pwhy = data.get("processorWhy").getAsJsonObject();
+        assertEquals("DD-DOWNSTREAM-fail", pwhy.get("code").getAsString());
+    }
+
+    @Test
+    void ingestion_orchReturnsNull_returns400_andOrchestrateNullWhy() {
+        IngestionRequest req = Mockito.mock(IngestionRequest.class);
+        Mockito.when(req.getPayload()).thenReturn("{\"a\":1}");
+
+        Mockito.when(orch.orchestrate(Mockito.any(JsonObject.class))).thenReturn(null);
+
+        Response resp = res.ingestion(req);
+
+        Console.log("ut_ingestion_orchNull_status", resp.getStatus());
+
+        String json = (String) resp.getEntity();
+        Console.log("ut_ingestion_orchNull_resp", json);
+
+        JsonObject jo = JsonParser.parseString(json).getAsJsonObject();
+        Console.log("ut_ingestion_orchNull_parsed", jo);
+
+        assertEquals(400, resp.getStatus());
+
+        JsonObject data = jo.get("data").getAsJsonObject();
+        JsonObject pwhy = data.get("processorWhy").getAsJsonObject();
+
+        assertEquals("DD-INGEST-orchestrate_null", pwhy.get("code").getAsString());
+    }
+
+    @Test
+    void http_findEventsByTimeWindow_fromTimeNull_returns400() {
+        jakarta.ws.rs.core.Response resp = res.findEventsByTimeWindow(null, "2026-01-15T01:00:00Z");
+        Console.log("ut_status", resp.getStatus());
         org.junit.jupiter.api.Assertions.assertEquals(400, resp.getStatus());
 
-        Object entity = resp.getEntity();
-        org.junit.jupiter.api.Assertions.assertNotNull(entity);
-
-        String json = (String) entity;
-        Console.log("ut_resp_entity", json);
-
-        com.google.gson.JsonObject jo =
-                com.google.gson.JsonParser.parseString(json).getAsJsonObject();
-
-        // assertFalse(pr.isOk())
-                org.junit.jupiter.api.Assertions.assertFalse(
-                        jo.get("ok").getAsBoolean()
-                );
-
-        // assertEquals(pr.getWhy().reason())
-                org.junit.jupiter.api.Assertions.assertEquals(
-                        "DD-INGEST-payload_blank",
-                        jo.getAsJsonObject("why").get("reason").getAsString()
-                );
-
-    }
-
-    @Test
-    void http_ingestion_validEvent_returns200_andCallsPoster() {
-        FakeHttpPoster fake = new FakeHttpPoster(200);
-        res.setHttpPoster(fake);
-
-        String ddEventJson = """
-    {
-      "kafka": {
-        "topic": "ingestion",
-        "partition": 0,
-        "offset": 1,
-        "timestamp": 1700000000000,
-        "headers": { "x": "y" }
-      },
-      "payload": {
-        "encoding": "base64",
-        "value": "SGVsbG8="
-      }
-    }
-    """;
-
-        IngestionRequest req = org.mockito.Mockito.mock(IngestionRequest.class);
-        org.mockito.Mockito.when(req.getPayload()).thenReturn(ddEventJson);
-
-        jakarta.ws.rs.core.Response resp = res.ingestion(req);
-
-        Console.log("ut_resp_status", resp.getStatus());
-        org.junit.jupiter.api.Assertions.assertEquals(200, resp.getStatus());
-
-
         String json = (String) resp.getEntity();
-        Console.log("ut_resp_entity", json);
-
-        com.google.gson.JsonObject jo =
-                com.google.gson.JsonParser.parseString(json).getAsJsonObject();
-
-        // assertNotNull(pr)
-                org.junit.jupiter.api.Assertions.assertNotNull(jo);
-
-        // assertTrue(pr.isOk())
-                org.junit.jupiter.api.Assertions.assertTrue(
-                        jo.get("ok").getAsBoolean()
-                );
-
-        // poster was invoked (via DDProducerClient)
-                org.junit.jupiter.api.Assertions.assertEquals(1, fake.calls);
-
-        // internal endpoint string used by orchestrator (must stay in sync)
-                org.junit.jupiter.api.Assertions.assertEquals("/api/ingestion", fake.lastEndpoint);
-
-        // sanity: body flowed through
-                org.junit.jupiter.api.Assertions.assertNotNull(fake.lastJsonBody);
-                org.junit.jupiter.api.Assertions.assertTrue(fake.lastJsonBody.contains("\"kafka\""));
-                org.junit.jupiter.api.Assertions.assertTrue(fake.lastJsonBody.contains("\"payload\""));
-
-
-    }
-
-    @Test
-    void http_ingestion_missingKafkaTopic_returns200_andOkFalse() {
-        FakeHttpPoster fake = new FakeHttpPoster(200);
-        res.setHttpPoster(fake);
-
-        String ddEventJson_missingTopic = """
-    {
-      "kafka": {
-        "partition": 0,
-        "offset": 1,
-        "timestamp": 1700000000000
-      },
-      "payload": {
-        "encoding": "base64",
-        "value": "SGVsbG8="
-      }
-    }
-    """;
-
-        IngestionRequest req = org.mockito.Mockito.mock(IngestionRequest.class);
-        org.mockito.Mockito.when(req.getPayload()).thenReturn(ddEventJson_missingTopic);
-
-        jakarta.ws.rs.core.Response resp = res.ingestion(req);
-
-        Console.log("ut_resp_status", resp.getStatus());
-        org.junit.jupiter.api.Assertions.assertEquals(200, resp.getStatus());
-
-        String json = (String) resp.getEntity();
-        Console.log("ut_resp_entity", json);
-
-        com.google.gson.JsonObject jo =
-                com.google.gson.JsonParser.parseString(json).getAsJsonObject();
-
-        // assertNotNull(pr)
-                org.junit.jupiter.api.Assertions.assertNotNull(jo);
-
-        // assertFalse(pr.isOk())
-                org.junit.jupiter.api.Assertions.assertFalse(
-                        jo.get("ok").getAsBoolean()
-                );
-
-        // Orchestrator validation reason
-                org.junit.jupiter.api.Assertions.assertEquals(
-                        "DD-ORCH-VALIDATE-kafka_topic",
-                        jo.getAsJsonObject("why").get("reason").getAsString()
-                );
-
-        // Validation should short-circuit; poster should not be called
-                org.junit.jupiter.api.Assertions.assertEquals(0, fake.calls);
-
-    }
-
-    @Test
-    void http_ingestion_payloadValueNotBase64_returns200_andOkFalse() {
-        FakeHttpPoster fake = new FakeHttpPoster(200);
-        res.setHttpPoster(fake);
-
-        String ddEventJson_badBase64 = """
-    {
-      "kafka": {
-        "topic": "ingestion",
-        "partition": 0,
-        "offset": 1,
-        "timestamp": 1700000000000
-      },
-      "payload": {
-        "encoding": "base64",
-        "value": "NOT_BASE64!!!"
-      }
-    }
-    """;
-
-        IngestionRequest req = org.mockito.Mockito.mock(IngestionRequest.class);
-        org.mockito.Mockito.when(req.getPayload()).thenReturn(ddEventJson_badBase64);
-
-        jakarta.ws.rs.core.Response resp = res.ingestion(req);
-
-        Console.log("ut_resp_status", resp.getStatus());
-        org.junit.jupiter.api.Assertions.assertEquals(200, resp.getStatus());
-
-        String json = (String) resp.getEntity();
-        Console.log("ut_resp_entity", json);
-
+        Console.log("ut_body", json);
         org.junit.jupiter.api.Assertions.assertNotNull(json);
 
         com.google.gson.JsonObject jo = com.google.gson.JsonParser.parseString(json).getAsJsonObject();
-        org.junit.jupiter.api.Assertions.assertNotNull(jo);
-
         org.junit.jupiter.api.Assertions.assertFalse(jo.get("ok").getAsBoolean());
 
         com.google.gson.JsonObject why = jo.getAsJsonObject("why");
         org.junit.jupiter.api.Assertions.assertNotNull(why);
-        org.junit.jupiter.api.Assertions.assertEquals(
-                "DD-ORCH-VALIDATE-payload_value_base64",
-                why.get("reason").getAsString()
-        );
-
-        // resource rejected before orchestrator/transport
-        org.junit.jupiter.api.Assertions.assertEquals(0, fake.calls);
+        org.junit.jupiter.api.Assertions.assertEquals("DD-INGEST-fromTime_blank", why.get("code").getAsString());
     }
 
     @Test
-    void http_ingestion_payloadNotJsonObject_returns400() {
-        FakeHttpPoster fake = new FakeHttpPoster(200);
-        res.setHttpPoster(fake);
-
-        // valid JSON, but not an object
-        String payloadArray = "[]";
-
-        IngestionRequest req = org.mockito.Mockito.mock(IngestionRequest.class);
-        org.mockito.Mockito.when(req.getPayload()).thenReturn(payloadArray);
-
-        jakarta.ws.rs.core.Response resp = res.ingestion(req);
-
-        Console.log("ut_resp_status", resp.getStatus());
+    void http_findEventsByTimeWindow_fromTimeBlank_returns400() {
+        jakarta.ws.rs.core.Response resp = res.findEventsByTimeWindow("   ", "2026-01-15T01:00:00Z");
+        Console.log("ut_status", resp.getStatus());
         org.junit.jupiter.api.Assertions.assertEquals(400, resp.getStatus());
 
         String json = (String) resp.getEntity();
-        Console.log("ut_resp_entity", json);
-
-        org.junit.jupiter.api.Assertions.assertNotNull(json);
+        Console.log("ut_body", json);
 
         com.google.gson.JsonObject jo = com.google.gson.JsonParser.parseString(json).getAsJsonObject();
-        org.junit.jupiter.api.Assertions.assertNotNull(jo);
-
         org.junit.jupiter.api.Assertions.assertFalse(jo.get("ok").getAsBoolean());
 
         com.google.gson.JsonObject why = jo.getAsJsonObject("why");
-        org.junit.jupiter.api.Assertions.assertNotNull(why);
-        org.junit.jupiter.api.Assertions.assertEquals(
-                "DD-INGEST-payload_invalid_json",
-                why.get("reason").getAsString()
-        );
+        org.junit.jupiter.api.Assertions.assertEquals("DD-INGEST-fromTime_blank", why.get("code").getAsString());
+    }
 
-        // resource rejected before orchestrator/transport
-        org.junit.jupiter.api.Assertions.assertEquals(0, fake.calls);
+    @Test
+    void http_findEventsByTimeWindow_toTimeNull_returns400() {
+        jakarta.ws.rs.core.Response resp = res.findEventsByTimeWindow("2026-01-15T00:00:00Z", null);
+        Console.log("ut_status", resp.getStatus());
+        org.junit.jupiter.api.Assertions.assertEquals(400, resp.getStatus());
+
+        String json = (String) resp.getEntity();
+        Console.log("ut_body", json);
+
+        com.google.gson.JsonObject jo = com.google.gson.JsonParser.parseString(json).getAsJsonObject();
+        org.junit.jupiter.api.Assertions.assertFalse(jo.get("ok").getAsBoolean());
+
+        com.google.gson.JsonObject why = jo.getAsJsonObject("why");
+        org.junit.jupiter.api.Assertions.assertEquals("DD-INGEST-toTime_blank", why.get("code").getAsString());
+    }
+
+    @Test
+    void http_findEventsByTimeWindow_toTimeBlank_returns400() {
+        jakarta.ws.rs.core.Response resp = res.findEventsByTimeWindow("2026-01-15T00:00:00Z", "   ");
+        Console.log("ut_status", resp.getStatus());
+        org.junit.jupiter.api.Assertions.assertEquals(400, resp.getStatus());
+
+        String json = (String) resp.getEntity();
+        Console.log("ut_body", json);
+
+        com.google.gson.JsonObject jo = com.google.gson.JsonParser.parseString(json).getAsJsonObject();
+        org.junit.jupiter.api.Assertions.assertFalse(jo.get("ok").getAsBoolean());
+
+        com.google.gson.JsonObject why = jo.getAsJsonObject("why");
+        org.junit.jupiter.api.Assertions.assertEquals("DD-INGEST-toTime_blank", why.get("code").getAsString());
+    }
+
+    @Test
+    void http_findEventsByTimeWindow_fromTimeInvalidIso_returns400() {
+        jakarta.ws.rs.core.Response resp = res.findEventsByTimeWindow("not-iso", "2026-01-15T01:00:00Z");
+        Console.log("ut_status", resp.getStatus());
+        org.junit.jupiter.api.Assertions.assertEquals(400, resp.getStatus());
+
+        String json = (String) resp.getEntity();
+        Console.log("ut_body", json);
+
+        com.google.gson.JsonObject jo = com.google.gson.JsonParser.parseString(json).getAsJsonObject();
+        org.junit.jupiter.api.Assertions.assertFalse(jo.get("ok").getAsBoolean());
+
+        com.google.gson.JsonObject why = jo.getAsJsonObject("why");
+        org.junit.jupiter.api.Assertions.assertEquals("DD-INGEST-time_invalid", why.get("code").getAsString());
+    }
+
+    @Test
+    void http_findEventsByTimeWindow_toTimeInvalidIso_returns400() {
+        jakarta.ws.rs.core.Response resp = res.findEventsByTimeWindow("2026-01-15T00:00:00Z", "bad-time");
+        Console.log("ut_status", resp.getStatus());
+        org.junit.jupiter.api.Assertions.assertEquals(400, resp.getStatus());
+
+        String json = (String) resp.getEntity();
+        Console.log("ut_body", json);
+
+        com.google.gson.JsonObject jo = com.google.gson.JsonParser.parseString(json).getAsJsonObject();
+        org.junit.jupiter.api.Assertions.assertFalse(jo.get("ok").getAsBoolean());
+
+        com.google.gson.JsonObject why = jo.getAsJsonObject("why");
+        org.junit.jupiter.api.Assertions.assertEquals("DD-INGEST-time_invalid", why.get("code").getAsString());
+    }
+
+    @Test
+    void http_findEventsByTimeWindow_windowEqual_returns400() {
+        jakarta.ws.rs.core.Response resp = res.findEventsByTimeWindow("2026-01-15T00:00:00Z", "2026-01-15T00:00:00Z");
+        Console.log("ut_status", resp.getStatus());
+        org.junit.jupiter.api.Assertions.assertEquals(400, resp.getStatus());
+
+        String json = (String) resp.getEntity();
+        Console.log("ut_body", json);
+
+        com.google.gson.JsonObject jo = com.google.gson.JsonParser.parseString(json).getAsJsonObject();
+        org.junit.jupiter.api.Assertions.assertFalse(jo.get("ok").getAsBoolean());
+
+        com.google.gson.JsonObject why = jo.getAsJsonObject("why");
+        org.junit.jupiter.api.Assertions.assertEquals("DD-INGEST-time_window_invalid", why.get("code").getAsString());
+    }
+
+    @Test
+    void http_findEventsByTimeWindow_windowReversed_returns400() {
+        jakarta.ws.rs.core.Response resp = res.findEventsByTimeWindow("2026-01-15T02:00:00Z", "2026-01-15T01:00:00Z");
+        Console.log("ut_status", resp.getStatus());
+        org.junit.jupiter.api.Assertions.assertEquals(400, resp.getStatus());
+
+        String json = (String) resp.getEntity();
+        Console.log("ut_body", json);
+
+        com.google.gson.JsonObject jo = com.google.gson.JsonParser.parseString(json).getAsJsonObject();
+        org.junit.jupiter.api.Assertions.assertFalse(jo.get("ok").getAsBoolean());
+
+        com.google.gson.JsonObject why = jo.getAsJsonObject("why");
+        org.junit.jupiter.api.Assertions.assertEquals("DD-INGEST-time_window_invalid", why.get("code").getAsString());
+    }
+
+    @Test
+    void http_findEventsByTimeWindow_trimsParams_andPassesTrimmedToStore_returns200() {
+        // Arrange
+        com.google.gson.JsonArray arr = new com.google.gson.JsonArray();
+        com.google.gson.JsonObject e1 = new com.google.gson.JsonObject();
+        e1.addProperty("id", "evt-1");
+        arr.add(e1);
+
+        org.mockito.Mockito.when(store.findEventsByTimeWindow(
+                org.mockito.Mockito.eq("2026-01-15T00:00:00Z"),
+                org.mockito.Mockito.eq("2026-01-15T01:00:00Z")
+        )).thenReturn(arr);
+
+        // Act
+        jakarta.ws.rs.core.Response resp = res.findEventsByTimeWindow("  2026-01-15T00:00:00Z  ", "  2026-01-15T01:00:00Z  ");
+        Console.log("ut_status", resp.getStatus());
+        org.junit.jupiter.api.Assertions.assertEquals(200, resp.getStatus());
+
+        String json = (String) resp.getEntity();
+        Console.log("ut_body", json);
+
+        com.google.gson.JsonObject out = com.google.gson.JsonParser.parseString(json).getAsJsonObject();
+        org.junit.jupiter.api.Assertions.assertTrue(out.get("ok").getAsBoolean());
+        org.junit.jupiter.api.Assertions.assertTrue(out.get("why").isJsonNull());
+
+        com.google.gson.JsonObject data = out.getAsJsonObject("data");
+        org.junit.jupiter.api.Assertions.assertEquals("2026-01-15T00:00:00Z", data.get("fromTime").getAsString());
+        org.junit.jupiter.api.Assertions.assertEquals("2026-01-15T01:00:00Z", data.get("toTime").getAsString());
+        org.junit.jupiter.api.Assertions.assertEquals(1, data.get("count").getAsInt());
+
+        com.google.gson.JsonArray events = data.getAsJsonArray("events");
+        org.junit.jupiter.api.Assertions.assertNotNull(events);
+        org.junit.jupiter.api.Assertions.assertEquals(1, events.size());
+
+        // Verify store call
+        org.mockito.Mockito.verify(store, org.mockito.Mockito.times(1))
+                .findEventsByTimeWindow("2026-01-15T00:00:00Z", "2026-01-15T01:00:00Z");
+    }
+
+    @Test
+    void http_findEventsByTimeWindow_storeReturnsNull_mapsToEmptyEventsAndCount0_returns200() {
+        org.mockito.Mockito.when(store.findEventsByTimeWindow(
+                org.mockito.Mockito.anyString(),
+                org.mockito.Mockito.anyString()
+        )).thenReturn(null);
+
+        jakarta.ws.rs.core.Response resp = res.findEventsByTimeWindow("2026-01-15T00:00:00Z", "2026-01-15T01:00:00Z");
+        Console.log("ut_status", resp.getStatus());
+        org.junit.jupiter.api.Assertions.assertEquals(200, resp.getStatus());
+
+        String json = (String) resp.getEntity();
+        Console.log("ut_body", json);
+
+        com.google.gson.JsonObject out = com.google.gson.JsonParser.parseString(json).getAsJsonObject();
+        org.junit.jupiter.api.Assertions.assertTrue(out.get("ok").getAsBoolean());
+        org.junit.jupiter.api.Assertions.assertTrue(out.get("why").isJsonNull());
+
+        com.google.gson.JsonObject data = out.getAsJsonObject("data");
+        org.junit.jupiter.api.Assertions.assertEquals(0, data.get("count").getAsInt());
+
+        com.google.gson.JsonArray events = data.getAsJsonArray("events");
+        org.junit.jupiter.api.Assertions.assertNotNull(events);
+        org.junit.jupiter.api.Assertions.assertEquals(0, events.size());
+    }
+
+    @Test
+    void http_findEventsByTimeWindow_storeReturnsEmptyArray_count0_returns200() {
+        org.mockito.Mockito.when(store.findEventsByTimeWindow(
+                org.mockito.Mockito.anyString(),
+                org.mockito.Mockito.anyString()
+        )).thenReturn(new com.google.gson.JsonArray());
+
+        jakarta.ws.rs.core.Response resp = res.findEventsByTimeWindow("2026-01-15T00:00:00Z", "2026-01-15T01:00:00Z");
+        Console.log("ut_status", resp.getStatus());
+        org.junit.jupiter.api.Assertions.assertEquals(200, resp.getStatus());
+
+        String json = (String) resp.getEntity();
+        Console.log("ut_body", json);
+
+        com.google.gson.JsonObject out = com.google.gson.JsonParser.parseString(json).getAsJsonObject();
+        com.google.gson.JsonObject data = out.getAsJsonObject("data");
+
+        org.junit.jupiter.api.Assertions.assertEquals(0, data.get("count").getAsInt());
+        org.junit.jupiter.api.Assertions.assertEquals(0, data.getAsJsonArray("events").size());
     }
 
 
-    //--------------------------------------------------
-    static class FakeHttpPoster implements HttpPoster {
-        String lastEndpoint;
-        String lastJsonBody;
-        int calls;
+    // ---------------- reflection helper ----------------
 
-        private final int status;
-
-        FakeHttpPoster(int status) {
-            this.status = status;
-        }
-
-        @Override
-        public int post(String endpoint, String jsonBody) {
-            this.calls++;
-            this.lastEndpoint = endpoint;
-            this.lastJsonBody = jsonBody;
-
-            Console.log("fakePoster_post_endpoint", endpoint);
-            Console.log("fakePoster_post_body", jsonBody);
-
-            return status;
+    private static void set(Object target, String fieldName, Object value) {
+        try {
+            java.lang.reflect.Field f = target.getClass().getDeclaredField(fieldName);
+            f.setAccessible(true);
+            f.set(target, value);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
         }
     }
-
-
 }
+

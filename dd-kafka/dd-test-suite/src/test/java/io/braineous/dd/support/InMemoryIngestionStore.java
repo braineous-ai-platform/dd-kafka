@@ -1,6 +1,7 @@
 package io.braineous.dd.support;
 
 import ai.braineous.rag.prompt.models.cgo.graph.SnapshotHash;
+import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import io.braineous.dd.core.model.Why;
@@ -187,6 +188,16 @@ public class InMemoryIngestionStore implements IngestionStore {
         String day = LocalDate.now(ZoneOffset.UTC).toString().replace("-", "");
         long nano = System.nanoTime();
         return "DD-ING-" + day + "-" + nano;
+    }
+
+    @Override
+    public JsonArray findEventsByTimeWindow(String fromTime, String toTime) {
+        return new JsonArray();
+    }
+
+    @Override
+    public JsonObject findEventsByIngestionId(String ingestionId) {
+        return new JsonObject();
     }
 
     // ---------------- assertion support ----------------

@@ -4,6 +4,8 @@ import ai.braineous.rag.prompt.cgo.api.FactExtractor;
 import ai.braineous.rag.prompt.cgo.api.GraphView;
 import ai.braineous.rag.prompt.cgo.api.LLMBridge;
 import ai.braineous.rag.prompt.cgo.api.LLMContext;
+import ai.braineous.rag.prompt.models.cgo.graph.GraphSnapshot;
+import ai.braineous.rag.prompt.observe.Console;
 import ai.braineous.rag.prompt.services.cgo.causal.CausalLLMBridge;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
@@ -40,6 +42,8 @@ public class DDCGOOrchestrator {
             // bridge to CGO
             GraphView view = this.llmBridge.submit(context);
 
+            //debug
+            Console.log("___cgo___", (((GraphSnapshot)view).toString()));
 
             return view;
 
