@@ -42,7 +42,7 @@ public class ReplayServiceIT {
     @Test
     public void it_replay_triggers_ingestion_via_orchestrator_for_all_events() {
 
-        seedReplayDocs();
+        seedReplayDocs(); // ensure payload contains view.snapshotHash so ingestion store can resolve
 
         ReplayRequest req = new ReplayRequest();
         set(req, "stream", "ingestion");
@@ -50,21 +50,53 @@ public class ReplayServiceIT {
         set(req, "fromTime", "2026-01-12T00:00:00Z");
         set(req, "toTime",   "2026-01-12T00:00:10Z");
 
+        var col = mongoClient
+                .getDatabase(MongoReplayStore.DB)
+                .getCollection(MongoReplayStore.INGESTION_COL);
+
+        // --- capture createdAt BEFORE (select by snapshotHash; never by ingestionId) ---
+        Document p1Before = col.find(new Document("snapshotHash", "SNAP-1")).first();
+        Document p2Before = col.find(new Document("snapshotHash", "SNAP-2")).first();
+
+        assertNotNull(p1Before);
+        assertNotNull(p2Before);
+
+        Date c1Before = p1Before.getDate("createdAt");
+        Date c2Before = p2Before.getDate("createdAt");
+
+        assertNotNull(c1Before);
+        assertNotNull(c2Before);
+
+        // --- Act ---
         ReplayResult result = replayService.replayByTimeWindow(req);
 
+        // --- Assert contract ---
         assertNotNull(result);
         assertTrue(result.ok());
         assertEquals(2, result.replayedCount());
 
-        var ingestionCol = mongoClient
-                .getDatabase(MongoReplayStore.DB) // replace with MongoIngestionStore.DB if different
-                .getCollection(MongoReplayStore.INGESTION_COL); // replace with MongoIngestionStore.INGESTION_COL if different
+        // --- capture createdAt AFTER ---
+        Document p1After = col.find(new Document("snapshotHash", "SNAP-1")).first();
+        Document p2After = col.find(new Document("snapshotHash", "SNAP-2")).first();
 
-        assertEquals(1, ingestionCol.countDocuments(new Document("payload", "{\"payload\":\"P1\"}")));
-        assertEquals(1, ingestionCol.countDocuments(new Document("payload", "{\"payload\":\"P2\"}")));
+        assertNotNull(p1After);
+        assertNotNull(p2After);
+
+        Date c1After = p1After.getDate("createdAt");
+        Date c2After = p2After.getDate("createdAt");
+
+        assertNotNull(c1After);
+        assertNotNull(c2After);
+
+        // --- THE KEY ASSERTION: replay = touch createdAt forward ---
+        assertTrue(c1After.getTime() >= c1Before.getTime());
+        assertTrue(c2After.getTime() >= c2Before.getTime());
     }
 
+
     // ---------------- helpers ----------------
+
+
 
     private void seedReplayDocs() {
         var col = mongoClient
@@ -74,18 +106,22 @@ public class ReplayServiceIT {
         Instant t1 = Instant.parse("2026-01-12T00:00:01Z");
         Instant t2 = Instant.parse("2026-01-12T00:00:02Z");
 
+        String payload1 = "{\"ingestionId\":\"ID-1\",\"view\":{\"snapshotHash\":\"SNAP-1\"},\"payload\":\"P1\"}";
+        String payload2 = "{\"ingestionId\":\"ID-2\",\"view\":{\"snapshotHash\":\"SNAP-2\"},\"payload\":\"P2\"}";
+
         col.insertOne(new Document()
                 .append("ingestionId", "ID-1")
-                .append("payload", "{\"payload\":\"P1\"}")
-                .append("createdAt", Date.from(t1))
-                .append("objectKey", "KEY-A"));
+                .append("snapshotHash", "SNAP-1")
+                .append("payload", payload1)
+                .append("createdAt", Date.from(t1)));
 
         col.insertOne(new Document()
                 .append("ingestionId", "ID-2")
-                .append("payload", "{\"payload\":\"P2\"}")
-                .append("createdAt", Date.from(t2))
-                .append("objectKey", "KEY-A"));
+                .append("snapshotHash", "SNAP-2")
+                .append("payload", payload2)
+                .append("createdAt", Date.from(t2)));
     }
+
 
     private void dropCollections() {
         mongoClient.getDatabase(MongoReplayStore.DB)
