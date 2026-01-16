@@ -1,6 +1,8 @@
 package io.braineous.dd.dlq.persistence;
 
 import ai.braineous.rag.prompt.observe.Console;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonObject;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
@@ -89,6 +91,27 @@ public class MongoDLQStore implements DLQStore {
         Console.log("dlq_store_system_ok", dlqId);
     }
 
+    @Override
+    public JsonArray findSystemFailureByTimeWindow(String fromTime, String toTime) {
+        return findByTimeWindow(systemCol(), fromTime, toTime);
+    }
+
+    @Override
+    public JsonObject findSystemFailureById(String dlqId) {
+        return findById(systemCol(), dlqId);
+    }
+
+    @Override
+    public JsonArray findDomainFailureByTimeWindow(String fromTime, String toTime) {
+        return findByTimeWindow(domainCol(), fromTime, toTime);
+    }
+
+    @Override
+    public JsonObject findDomainFailureById(String dlqId) {
+        return findById(domainCol(), dlqId);
+    }
+
+
 
     //-----helpers----------------------------------------------------
     private static String newDlqId() {
@@ -105,5 +128,73 @@ public class MongoDLQStore implements DLQStore {
         } catch (Exception e) {
             throw new IllegalStateException(e);
         }
+    }
+
+    private JsonArray findByTimeWindow(
+            com.mongodb.client.MongoCollection<org.bson.Document> col,
+            String fromTime,
+            String toTime
+    ) {
+        JsonArray arr = new JsonArray();
+
+        if (fromTime == null || toTime == null) {
+            return arr;
+        }
+
+        java.time.Instant from;
+        java.time.Instant to;
+
+        try {
+            from = java.time.Instant.parse(fromTime);
+            to   = java.time.Instant.parse(toTime);
+        } catch (Exception e) {
+            return arr;
+        }
+
+        org.bson.Document filter = new org.bson.Document("createdAt",
+                new org.bson.Document("$gte", java.util.Date.from(from))
+                        .append("$lte", java.util.Date.from(to))
+        );
+
+        com.mongodb.client.MongoCursor<org.bson.Document> it =
+                col.find(filter)
+                        .sort(new org.bson.Document("createdAt", -1))
+                        .iterator();
+
+        try {
+            while (it.hasNext()) {
+                org.bson.Document d = it.next();
+                arr.add(
+                        com.google.gson.JsonParser
+                                .parseString(d.toJson())
+                                .getAsJsonObject()
+                );
+            }
+        } finally {
+            it.close();
+        }
+
+        return arr;
+    }
+
+    private JsonObject findById(
+            com.mongodb.client.MongoCollection<org.bson.Document> col,
+            String dlqId
+    ) {
+        if (dlqId == null || dlqId.trim().isEmpty()) {
+            return new JsonObject();
+        }
+
+        org.bson.Document d =
+                col.find(new org.bson.Document("dlqId", dlqId))
+                        .first();
+
+        if (d == null) {
+            return new JsonObject();
+        }
+
+        return com.google.gson.JsonParser
+                .parseString(d.toJson())
+                .getAsJsonObject();
     }
 }
