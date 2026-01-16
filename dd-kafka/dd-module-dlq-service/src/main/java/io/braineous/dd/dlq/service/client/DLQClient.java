@@ -64,6 +64,8 @@ public class DLQClient {
                     new Why("DD-REST-non_2xx", "HTTP status " + status));
 
         } catch (Exception e) {
+            e.printStackTrace();
+
             long durationMs = (System.nanoTime() - t0) / 1_000_000L;
 
             String msg = (e.getMessage() != null && !e.getMessage().isBlank())

@@ -1,6 +1,7 @@
 package io.braineous.dd.processor.client;
 
 import ai.braineous.cgo.config.ConfigService;
+import ai.braineous.rag.prompt.observe.Console;
 import io.braineous.dd.core.config.DDConfigService;
 import io.braineous.dd.core.processor.HttpPoster;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -18,8 +19,10 @@ public class DDIngestionHttpPoster implements HttpPoster {
 
         java.net.http.HttpClient client = java.net.http.HttpClient.newHttpClient();
 
+        String baseUrl = base + "/" + endpoint;
+        Console.log("__________producer_url_______", baseUrl);
         java.net.http.HttpRequest request = java.net.http.HttpRequest.newBuilder()
-                .uri(java.net.URI.create(base + "/" + endpoint))
+                .uri(java.net.URI.create(baseUrl))
                 .header("Content-Type", "application/json")
                 .POST(java.net.http.HttpRequest.BodyPublishers.ofString(jsonBody))
                 .build();

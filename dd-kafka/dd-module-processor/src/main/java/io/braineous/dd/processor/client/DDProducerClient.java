@@ -52,6 +52,8 @@ public class DDProducerClient {
                     new Why("DD-REST-non_2xx", "HTTP status " + status));
 
         } catch (Exception e) {
+            e.printStackTrace();
+
             String msg = (e.getMessage() != null && !e.getMessage().isBlank())
                     ? e.getMessage()
                     : e.getClass().getSimpleName();

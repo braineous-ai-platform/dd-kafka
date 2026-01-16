@@ -13,6 +13,7 @@ services:
       timeout: 3s
       retries: 20
 
+
   zookeeper:
     image: confluentinc/cp-zookeeper:7.6.1
     environment:
@@ -48,12 +49,22 @@ services:
       dockerfile: src/main/docker/Dockerfile.jvm
     environment:
       - QUARKUS_HTTP_PORT=8081
+      - QUARKUS_MONGODB_CONNECTION_STRING=mongodb://mongo:27017/dd
       - DD_PORT=8081
       - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
       - DD_PROCESSOR_BASE_URL=http://dd-module-kafka-processor:8082
       - DD_DLQ_BASE_URL=http://dd-module-dlq-service:8083
+      - DD_CONFIG_PATH=/dd-default.properties
+    volumes:
+      - ./dd-default-docker.properties:/dd-default.properties:ro
+    healthcheck:
+      test: [ "CMD", "sh", "-lc", "echo > /dev/tcp/localhost/8081" ]
+      interval: 3s
+      timeout: 2s
+      retries: 30
     depends_on:
       - kafka
+      - mongo
     ports:
       - "8081"
 
@@ -63,11 +74,16 @@ services:
       dockerfile: src/main/docker/Dockerfile.jvm
     environment:
       - QUARKUS_HTTP_PORT=8082
+      - QUARKUS_MONGODB_CONNECTION_STRING=mongodb://mongo:27017/dd
       - DD_PORT=8082
       - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
       - DD_DLQ_BASE_URL=http://dd-module-dlq-service:8083
+      - -DD_CONFIG_PATH=/dd-default.properties
+    volumes:
+      - ./dd-default-docker.properties:/dd-default.properties:ro
     depends_on:
       - kafka
+      - mongo
     ports:
       - "8082"
 
@@ -77,10 +93,15 @@ services:
       dockerfile: src/main/docker/Dockerfile.jvm
     environment:
       - QUARKUS_HTTP_PORT=8083
+      - QUARKUS_MONGODB_CONNECTION_STRING=mongodb://mongo:27017/dd
       - DD_PORT=8083
       - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+      - DD_CONFIG_PATH=/dd-default.properties
+    volumes:
+      - ./dd-default-docker.properties:/dd-default.properties:ro
     depends_on:
       - kafka
+      - mongo
     ports:
       - "8083"
 
@@ -90,13 +111,22 @@ services:
       dockerfile: src/main/docker/Dockerfile.jvm
     environment:
       - QUARKUS_HTTP_PORT=8080
+      - QUARKUS_MONGODB_CONNECTION_STRING=mongodb://mongo:27017/dd
       - DD_PORT=8080
       - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
       - DD_PRODUCER_BASE_URL=http://dd-module-kafka-producer:8081
       - DD_PROCESSOR_BASE_URL=http://dd-module-kafka-processor:8082
       - DD_DLQ_BASE_URL=http://dd-module-dlq-service:8083
+      - DD_CONFIG_PATH=/dd-default.properties
+    volumes:
+      - ./dd-default-docker.properties:/dd-default.properties:ro
     depends_on:
-      - kafka
+      dd-module-kafka-producer:
+        condition: service_healthy
+      kafka:
+        condition: service_started
+      mongo:
+        condition: service_started
     ports:
       - "8080:8080"
 

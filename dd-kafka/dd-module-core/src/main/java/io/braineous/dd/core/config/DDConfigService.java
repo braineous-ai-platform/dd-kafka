@@ -19,7 +19,7 @@ public class DDConfigService {
 
         return switch (ddEnv) {
             case "local"  -> "http://localhost:8081";
-            case "docker" -> "http://localhost:8081"; // same today, diverge later
+            case "docker" -> "http://dd-module-kafka-producer:8081"; // same today, diverge later
             case "test"   -> "http://localhost:" + ddPackPort + "/__internal/producer";
             default       -> "http://localhost:8081";
         };
@@ -32,7 +32,7 @@ public class DDConfigService {
 
         return switch (ddEnv) {
             case "local"  -> "http://localhost:8083";
-            case "docker" -> "http://localhost:8083"; // same today, diverge later
+            case "docker" -> "http://dd-module-dlq-service:8083"; // same today, diverge later
             case "test"   -> "http://localhost:" + ddPackPort + "/__internal/dlq";
             default       -> "http://localhost:8083";
         };
