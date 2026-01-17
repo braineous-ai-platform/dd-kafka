@@ -227,6 +227,109 @@ Each DLQ entry is classified, explainable, and traceable via its `ingestionId`.
 DLQs exist to make failures **visible, attributable, and actionable** —  
 not to hide them behind automatic retries.
 
+## Next Steps
+
+KafkaDD is designed to be **understood before it is extended**.  
+Before adding features or integrating it into a larger system, ensure the core contracts are clear and stable.
+
+### 1. Read the Core Documentation (in order)
+
+Start with the four core documents below. They define the non-negotiable semantics of the system.
+
+1. **Getting Started — Ingestion & Contracts**  
+   [`GETTING_STARTED.md`](GETTING_STARTED.md)  
+   Learn what ingestion acceptance means, what it does *not* mean, and how the public contract is intentionally minimal.
+
+2. **Configuration — Determinism & Identity**  
+   [`CONFIGURATION.md`](CONFIGURATION.md)  
+   Understand how deterministic resolution, identity (`ingestionId`), and frozen rules are configured and enforced.
+
+3. **Operations — Snapshots, DLQ, and Observability**  
+   [`OPERATIONS.md`](OPERATIONS.md)  
+   Learn how to observe outcomes, interpret DLQ classifications, and reason about system state without relying on storage internals.
+
+4. **Docker — Running KafkaDD Locally**  
+   [`DOCKER.md`](DOCKER.md)  
+   Run KafkaDD in a controlled local environment to observe happy-path ingestion and failure behavior.
+
+---
+
+### 2. Run the System Before Extending It
+
+Before modifying or extending KafkaDD, ensure you can:
+
+- submit a valid ingestion request
+- receive a stable `ingestionId`
+- observe the outcome via DLQ or system logs
+- explain *why* the outcome occurred
+
+Start with **happy-path ingestion only**.  
+Replay, failure injection, and concurrency come later.
+
+---
+
+### 3. Observe Before You Change Anything
+
+For a single `ingestionId`, you should be able to answer:
+
+- Was the request accepted?
+- Did it succeed or fail?
+- If it failed, was it classified as domain or system failure?
+- Is replay meaningful or pointless?
+
+If these questions cannot be answered confidently, do not extend the system yet.
+
+---
+
+### 4. Extend Along Explicit Axes Only
+
+KafkaDD is intentionally narrow.  
+Safe extensions include:
+
+- additional ingestion validations
+- new snapshot-derived views
+- stricter DLQ classification
+- improved WHY codes and diagnostics
+- tooling for observability and inspection
+
+Avoid extensions that:
+- mutate anchored facts
+- hide failures behind retries
+- introduce non-deterministic identifiers
+- couple consumers to internal storage
+
+If determinism weakens, the extension is incorrect.
+
+---
+
+### 5. Treat Replay as a Contract, Not a Convenience
+
+Replay exists to:
+- reapply already-anchored facts
+- complete interrupted system work
+- preserve auditability
+
+Replay is **not**:
+- a retry button
+- a recovery hack
+- a way to fix bad history
+
+If replay changes history, something is broken.
+
+---
+
+### 6. Read the Troubleshooting Appendix Last
+
+The troubleshooting appendix is for **production reality**, not onboarding.
+
+Read it when:
+- an outcome is surprising
+- determinism appears violated
+- failures seem unclear or inconsistent
+
+Most issues are misunderstandings of the contract, not bugs.
+
+
 
 
 
