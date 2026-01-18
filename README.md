@@ -322,6 +322,13 @@ If replay changes history, something is broken.
 
 The troubleshooting appendix is for **production reality**, not onboarding.
 
+1. **TroubleShooting Guide**
+   [`TROUBLESHOOTING.md`](TROUBLESHOOTING.md)
+2. **Troubleshooting Index**
+   [`TROUBLESHOOTINGINDEX.md`](TROUBLESHOOTINGINDEX.md)
+   
+
+
 Read it when:
 - an outcome is surprising
 - determinism appears violated
