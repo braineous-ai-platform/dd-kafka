@@ -1,12 +1,15 @@
 package io.braineous.dd.processor;
 
 
+import ai.braineous.rag.prompt.cgo.api.Fact;
 import ai.braineous.rag.prompt.cgo.api.GraphView;
 import ai.braineous.rag.prompt.models.cgo.graph.GraphSnapshot;
 import ai.braineous.rag.prompt.models.cgo.graph.SnapshotHash;
+import ai.braineous.rag.prompt.observe.Console;
 import com.google.gson.JsonObject;
 
 import io.braineous.dd.cgo.DDCGOOrchestrator;
+import io.braineous.dd.core.model.DDEvent;
 import io.braineous.dd.dlq.service.DLQOrchestrator;
 import io.braineous.dd.ingestion.persistence.MongoIngestionStore;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -17,6 +20,9 @@ import io.braineous.dd.core.processor.HttpPoster;
 import io.braineous.dd.core.processor.JsonSerializer;
 import io.braineous.dd.processor.client.DDProducerClient;
 import io.braineous.dd.core.processor.GsonJsonSerializer;
+
+import java.util.Map;
+import java.util.Set;
 
 @ApplicationScoped
 public class ProcessorOrchestrator {
@@ -259,26 +265,39 @@ public class ProcessorOrchestrator {
     }
 
     String nextIngestionId(String ddEventStr, GraphView view) {
-        if(view == null){
+        String snap = this.resolveSnapshotHash(ddEventStr, view);
+
+        if(snap == null){
             return null;
         }
 
+        return "DD-ING-" + snap;
+    }
+
+    private String resolveSnapshotHash(String ddEventStr,GraphView view){
+        if(view == null){
+            return null;
+        }
         GraphSnapshot snapshot = (GraphSnapshot) view;
         if(snapshot == null){
             return null;
         }
 
-        SnapshotHash snapshotHash = ((GraphSnapshot) view).snapshotHash();
-        if(snapshotHash == null){
+        DDEvent ddEvent = DDEvent.fromJson(ddEventStr);
+        String factId = ddEvent.getPayload().deriveFactIdFromPayloadBase64();
+        if(factId == null || factId.trim().isBlank()){
             return null;
         }
 
-        String snap = snapshotHash.getValue();
-        if(snap == null || snap.trim().length() == 0){
+
+        //resolve the snapshot hash
+        Map<String, Fact> nodes = snapshot.nodes();
+        Fact fact = nodes.get(factId);
+        if(fact == null){
             return null;
         }
 
-        return this.ingestionStore.resolveIngestionId(ddEventStr, snap);
+        return factId;
     }
 
 }

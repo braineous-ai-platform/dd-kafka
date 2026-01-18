@@ -6,6 +6,9 @@ import com.google.gson.GsonBuilder;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
+import java.util.Base64;
+import java.util.UUID;
+
 public class DDEvent {
 
     private static final Gson GSON = new GsonBuilder().disableHtmlEscaping().create();
@@ -122,6 +125,23 @@ public class DDEvent {
 
         public void setEncoding(String encoding) { this.encoding = encoding; }
         public void setValue(String value) { this.value = value; }
+
+        public String deriveFactIdFromPayloadBase64() {
+
+            if (this.value == null) {
+                throw new IllegalArgumentException("payloadBase64 must not be null");
+            }
+
+            // 1. Decode payload bytes
+            byte[] payloadBytes = Base64.getDecoder().decode(this.value);
+
+            // 2. Derive deterministic UUID from bytes
+            UUID factUuid = UUID.nameUUIDFromBytes(payloadBytes);
+
+            // 3. Return canonical FactId
+            return factUuid.toString();
+        }
+
     }
 }
 

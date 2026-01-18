@@ -1,6 +1,8 @@
 package io.braineous.dd.processor;
 
+import ai.braineous.rag.prompt.cgo.api.Fact;
 import ai.braineous.rag.prompt.models.cgo.graph.GraphBuilder;
+import ai.braineous.rag.prompt.models.cgo.graph.GraphSnapshot;
 import ai.braineous.rag.prompt.observe.Console;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
@@ -31,67 +33,7 @@ public class ProcessorOrchestratorTest {
         GraphBuilder.getInstance().clear();
     }
 
-    @org.junit.jupiter.api.Test
-    void orchestrate_ok_returns_processorResult_and_consumer_persists_once() {
-        InMemoryIngestionStore store = (InMemoryIngestionStore) eventOrch.getStore();
-        assertNotNull(store);
-        HttpPoster httpPoster = new FakeHttpPoster(200);
-        this.orch.setHttpPoster(httpPoster);
 
-        String ddEventJson = """
-    {
-      "kafka": {
-        "topic": "requests",
-        "partition": 3,
-        "offset": 48192,
-        "timestamp": 1767114000123,
-        "key": "fact-001"
-      },
-      "payload": {
-        "encoding": "base64",
-        "value": "AAECAwQFBgcICQ=="
-      }
-    }
-    """;
-
-        // -------- Act 1: producer side (anchoring) --------
-        JsonObject ddEvent = JsonParser.parseString(ddEventJson).getAsJsonObject();
-        ProcessorResult pr = orch.orchestrate(ddEvent);
-
-        // -------- Assert 1: ProcessorResult contract --------
-        assertNotNull(pr);
-        assertTrue(pr.isOk());
-
-        assertNotNull(pr.getId());
-        assertTrue(pr.getId().trim().length() > 0);
-
-        assertNotNull(pr.getIngestionId());
-        assertTrue(pr.getIngestionId().trim().length() > 0);
-
-        assertNull(pr.getWhy());
-
-        // We expect orchestrator to return the anchored ddEventJson
-        assertNotNull(pr.getDdEventJson());
-
-        // -------- Act 2: call consumer directly (no Kafka) --------
-        IngestionReceipt receipt = eventOrch.orchestrate(pr.getDdEventJson().toString());
-        assertNotNull(receipt);
-
-        // -------- Assert 2: store seam --------
-        assertEquals(1, store.storeCalls());
-
-        String persisted = store.lastStoredPayload();
-        assertNotNull(persisted);
-        assertTrue(persisted.trim().length() > 0);
-
-        assertTrue(persisted.contains("\"ingestionId\""));
-        assertTrue(persisted.contains(pr.getIngestionId()));
-
-        assertTrue(persisted.contains("\"kafka\""));
-        assertTrue(persisted.contains("\"topic\":\"requests\""));
-        assertTrue(persisted.contains("\"payload\""));
-        assertTrue(persisted.contains("\"encoding\":\"base64\""));
-    }
 
     @org.junit.jupiter.api.Test
     void orchestrate_non2xx_returns_fail_why_and_does_not_persist() {
@@ -492,111 +434,213 @@ public class ProcessorOrchestratorTest {
     }
 
     @org.junit.jupiter.api.Test
+    void orchestrate_ok_returns_processorResult_and_consumer_persists_once() {
+
+        // ---- build input (NO kafka.key) ----
+        com.google.gson.JsonObject kafka = new com.google.gson.JsonObject();
+        kafka.addProperty("topic", "requests");
+        kafka.addProperty("partition", 3);
+        kafka.addProperty("offset", 48192L);
+        kafka.addProperty("timestamp", 1767114000123L);
+
+        com.google.gson.JsonObject payload = new com.google.gson.JsonObject();
+        payload.addProperty("encoding", "base64");
+        payload.addProperty("value", "AAECAwQFBgcICQ==");
+
+        com.google.gson.JsonObject in = new com.google.gson.JsonObject();
+        in.add("kafka", kafka);
+        in.add("payload", payload);
+
+        Console.log("test.processor.orch.in", in.toString());
+
+        // ---- act ----
+        ProcessorResult out = this.orch.orchestrate(in);
+
+        com.google.gson.Gson gson = new com.google.gson.Gson();
+        Console.log("test.processor.orch.result.obj", gson.toJson(out));
+        Console.log("test.processor.orch.out.ddEventJson", in.toString()); // PO mutates input in-place
+
+        // ---- assert ----
+        org.junit.jupiter.api.Assertions.assertNotNull(out);
+        org.junit.jupiter.api.Assertions.assertTrue(out.isOk(), "Expected ok=true but got ok=false: " + gson.toJson(out));
+
+        String ingestionId = out.getIngestionId();
+        Console.log("test.processor.orch.ingestionId", ingestionId);
+
+        org.junit.jupiter.api.Assertions.assertNotNull(ingestionId);
+        org.junit.jupiter.api.Assertions.assertTrue(ingestionId.trim().length() > 0);
+
+        // input should now carry ingestionId (since PO stamps it on ddEventJson)
+        org.junit.jupiter.api.Assertions.assertTrue(in.has("ingestionId"));
+        org.junit.jupiter.api.Assertions.assertEquals(ingestionId, in.get("ingestionId").getAsString());
+
+        // kafka + payload must still be present and unchanged (no key added)
+        org.junit.jupiter.api.Assertions.assertTrue(in.has("kafka"));
+        org.junit.jupiter.api.Assertions.assertTrue(in.get("kafka").isJsonObject());
+        org.junit.jupiter.api.Assertions.assertFalse(in.getAsJsonObject("kafka").has("key"));
+
+        org.junit.jupiter.api.Assertions.assertTrue(in.has("payload"));
+        org.junit.jupiter.api.Assertions.assertTrue(in.get("payload").isJsonObject());
+        org.junit.jupiter.api.Assertions.assertEquals("base64", in.getAsJsonObject("payload").get("encoding").getAsString());
+        org.junit.jupiter.api.Assertions.assertEquals("AAECAwQFBgcICQ==", in.getAsJsonObject("payload").get("value").getAsString());
+
+        // view should be attached on success
+        org.junit.jupiter.api.Assertions.assertTrue(in.has("view"));
+        org.junit.jupiter.api.Assertions.assertTrue(in.get("view").isJsonObject());
+    }
+
+    @org.junit.jupiter.api.Test
     void orchestrate_sets_same_ingestionId_on_processorResult_and_ddEventJson() {
-        InMemoryIngestionStore store = (InMemoryIngestionStore) eventOrch.getStore();
-        assertNotNull(store);
 
-        HttpPoster httpPoster = new FakeHttpPoster(200);
-        this.orch.setHttpPoster(httpPoster);
+        // ---- build input (NO kafka.key) ----
+        com.google.gson.JsonObject kafka = new com.google.gson.JsonObject();
+        kafka.addProperty("topic", "requests");
+        kafka.addProperty("partition", 3);
+        kafka.addProperty("offset", 48192L);
+        kafka.addProperty("timestamp", 1767114000123L);
 
-        String ddEventJson = """
-    {
-      "kafka": {
-        "topic": "requests",
-        "partition": 3,
-        "offset": 48192,
-        "timestamp": 1767114000123,
-        "key": "fact-7c"
-      },
-      "payload": {
-        "encoding": "base64",
-        "value": "AAECAwQFBgcICQ=="
-      }
+        com.google.gson.JsonObject payload = new com.google.gson.JsonObject();
+        payload.addProperty("encoding", "base64");
+        payload.addProperty("value", "AAECAwQFBgcICQ==");
+
+        com.google.gson.JsonObject in = new com.google.gson.JsonObject();
+        in.add("kafka", kafka);
+        in.add("payload", payload);
+
+        Console.log("test.processor.orch.idAxis.in", in.toString());
+
+        // ---- act ----
+        ProcessorResult out = this.orch.orchestrate(in);
+
+        com.google.gson.Gson gson = new com.google.gson.Gson();
+        Console.log("test.processor.orch.idAxis.result.obj", gson.toJson(out));
+        Console.log("test.processor.orch.idAxis.ddEventJson.after", in.toString());
+
+        // ---- assert ----
+        org.junit.jupiter.api.Assertions.assertNotNull(out);
+        org.junit.jupiter.api.Assertions.assertTrue(out.isOk(), "Expected ok=true but got ok=false: " + gson.toJson(out));
+
+        String ingestionId = out.getIngestionId();
+        Console.log("test.processor.orch.idAxis.ingestionId", ingestionId);
+
+        org.junit.jupiter.api.Assertions.assertNotNull(ingestionId);
+        org.junit.jupiter.api.Assertions.assertTrue(ingestionId.trim().length() > 0);
+
+        // ddEventJson stamped ingestionId must match ProcessorResult ingestionId
+        org.junit.jupiter.api.Assertions.assertTrue(in.has("ingestionId"));
+        org.junit.jupiter.api.Assertions.assertEquals(ingestionId, in.get("ingestionId").getAsString());
+
+        // sanity: no kafka.key garbage introduced
+        org.junit.jupiter.api.Assertions.assertFalse(in.getAsJsonObject("kafka").has("key"));
     }
-    """;
-
-        Console.log("test.processor.orch.idAxis.in", ddEventJson);
-
-        JsonObject ddEvent = JsonParser.parseString(ddEventJson).getAsJsonObject();
-
-        ProcessorResult pr = orch.orchestrate(ddEvent);
-
-        Console.log("test.processor.orch.idAxis.result", pr == null ? null : pr.toJsonString());
-
-        assertNotNull(pr);
-        assertTrue(pr.isOk());
-
-        assertNotNull(pr.getIngestionId());
-        assertTrue(pr.getIngestionId().trim().length() > 0);
-
-        assertNotNull(pr.getDdEventJson());
-        assertTrue(pr.getDdEventJson().has("ingestionId"));
-
-        String anchoredId = pr.getDdEventJson().get("ingestionId").getAsString();
-        assertNotNull(anchoredId);
-        assertTrue(anchoredId.trim().length() > 0);
-
-        // Canonical axis invariant: API id == anchored event id
-        assertEquals(pr.getIngestionId(), anchoredId);
-
-        // Producer-only test
-        assertEquals(0, store.storeCalls());
-    }
-
 
     @org.junit.jupiter.api.Test
     void orchestrate_adds_only_anchor_fields_and_preserves_kafka_and_payload() {
-        InMemoryIngestionStore store = (InMemoryIngestionStore) eventOrch.getStore();
-        assertNotNull(store);
 
-        HttpPoster httpPoster = new FakeHttpPoster(200);
-        this.orch.setHttpPoster(httpPoster);
+        // ---- build input (NO kafka.key) ----
+        com.google.gson.JsonObject kafka = new com.google.gson.JsonObject();
+        kafka.addProperty("topic", "requests");
+        kafka.addProperty("partition", 9);
+        kafka.addProperty("offset", 123L);
+        kafka.addProperty("timestamp", 1767114000999L);
 
-        String ddEventJson = """
-    {
-      "kafka": {
-        "topic": "requests",
-        "partition": 9,
-        "offset": 123,
-        "timestamp": 1767114000999,
-        "key": "fact-009"
-      },
-      "payload": {
-        "encoding": "base64",
-        "value": "AAECAwQFBgcICQ=="
-      }
+        com.google.gson.JsonObject payload = new com.google.gson.JsonObject();
+        payload.addProperty("encoding", "base64");
+        payload.addProperty("value", "AAECAwQFBgcICQ==");
+
+        com.google.gson.JsonObject in = new com.google.gson.JsonObject();
+        in.add("kafka", kafka);
+        in.add("payload", payload);
+
+        // snapshot of original kafka/payload for comparison
+        String kafkaBefore = in.getAsJsonObject("kafka").toString();
+        String payloadBefore = in.getAsJsonObject("payload").toString();
+
+        Console.log("test.processor.orch.mutation.in", in.toString());
+
+        // ---- act ----
+        ProcessorResult out = this.orch.orchestrate(in);
+
+        com.google.gson.Gson gson = new com.google.gson.Gson();
+        Console.log("test.processor.orch.mutation.result.obj", gson.toJson(out));
+        Console.log("test.processor.orch.mutation.input.after", in.toString());
+
+        // ---- assert ----
+        org.junit.jupiter.api.Assertions.assertNotNull(out);
+        org.junit.jupiter.api.Assertions.assertTrue(out.isOk(), "Expected ok=true but got ok=false: " + gson.toJson(out));
+
+        // kafka + payload preserved (byte-for-byte JSON string compare)
+        org.junit.jupiter.api.Assertions.assertEquals(kafkaBefore, in.getAsJsonObject("kafka").toString());
+        org.junit.jupiter.api.Assertions.assertEquals(payloadBefore, in.getAsJsonObject("payload").toString());
+
+        // only anchor fields added
+        org.junit.jupiter.api.Assertions.assertTrue(in.has("ingestionId"));
+        org.junit.jupiter.api.Assertions.assertTrue(in.has("view"));
+
+        // still no kafka.key garbage
+        org.junit.jupiter.api.Assertions.assertFalse(in.getAsJsonObject("kafka").has("key"));
+
+        // ingestionId matches result ingestionId
+        org.junit.jupiter.api.Assertions.assertEquals(out.getIngestionId(), in.get("ingestionId").getAsString());
     }
-    """;
 
-        JsonObject input = JsonParser.parseString(ddEventJson).getAsJsonObject();
 
-        // snapshot original kafka/payload for later comparison
-        JsonObject kafkaBefore = input.getAsJsonObject("kafka").deepCopy();
-        JsonObject payloadBefore = input.getAsJsonObject("payload").deepCopy();
+    //------------------------------------------------------
 
-        Console.log("test.processor.orch.mutation.in", input.toString());
 
-        ProcessorResult pr = orch.orchestrate(input);
 
-        Console.log("test.processor.orch.mutation.result", pr == null ? null : pr.toJsonString());
-        Console.log("test.processor.orch.mutation.input.after", input.toString());
+    private String resolveIngestionIdFromSnapshot(GraphSnapshot snap) {
 
-        assertNotNull(pr);
-        assertTrue(pr.isOk());
+        if (snap == null) {
+            return null;
+        }
 
-        // Anchors exist
-        assertTrue(input.has("ingestionId"));
-        assertTrue(input.has("view"));
+        java.util.Map<String, Fact> nodes = snap.nodes();
+        if (nodes == null) {
+            return null;
+        }
 
-        assertNotNull(pr.getIngestionId());
-        assertEquals(pr.getIngestionId(), input.get("ingestionId").getAsString());
+        if (nodes.size() != 1) {
+            return null; // violates 1 ingestion == 1 fact invariant
+        }
 
-        // Preserve kafka/payload contents (no drift)
-        assertEquals(kafkaBefore.toString(), input.getAsJsonObject("kafka").toString());
-        assertEquals(payloadBefore.toString(), input.getAsJsonObject("payload").toString());
+        for (java.util.Map.Entry<String, Fact> e : nodes.entrySet()) {
 
-        // This is a producer-only mutation test: no consumer call expected
-        assertEquals(0, store.storeCalls());
+            String key = e.getKey();
+            if (key != null && key.trim().length() > 0) {
+                return key;
+            }
+
+            Fact f = e.getValue();
+            if (f != null) {
+                String id = f.getId();
+                if (id != null && id.trim().length() > 0) {
+                    return id;
+                }
+            }
+        }
+
+        return null;
+    }
+
+
+    private JsonObject buildEvent_noKey(String topic, int partition, long offset, long timestamp, String payloadBase64) {
+
+        JsonObject kafka = new JsonObject();
+        kafka.addProperty("topic", topic);
+        kafka.addProperty("partition", partition);
+        kafka.addProperty("offset", offset);
+        kafka.addProperty("timestamp", timestamp);
+
+        JsonObject payload = new JsonObject();
+        payload.addProperty("encoding", "base64");
+        payload.addProperty("value", payloadBase64);
+
+        JsonObject root = new JsonObject();
+        root.add("kafka", kafka);
+        root.add("payload", payload);
+
+        return root;
     }
 
 

@@ -30,6 +30,8 @@ public class MongoIngestionStore implements IngestionStore {
     public static final String F_SNAPSHOT_HASH = "snapshotHash";
     private static final String F_PAYLOAD_HASH  = "payloadHash";
 
+    public static final String F_INGESTION_ID = "ingestionId";
+
     private final AtomicBoolean ingestionIndexed = new AtomicBoolean(false);
 
     @Inject
@@ -41,7 +43,7 @@ public class MongoIngestionStore implements IngestionStore {
             // Idempotency contract: UNIQUE on idKey
             // If race happens, treat duplicate key as idempotent success (no read-back).
             col.createIndex(new Document("createdAt", -1));
-            col.createIndex(new Document(F_SNAPSHOT_HASH, 1), new com.mongodb.client.model.IndexOptions().unique(true));
+            col.createIndex(new Document(F_INGESTION_ID, 1), new com.mongodb.client.model.IndexOptions().unique(true));
             col.createIndex(new Document(F_PAYLOAD_HASH, 1));
         } catch (Exception ignored) {
             // swallow: indexes are not a runtime concern in this phase
@@ -127,7 +129,7 @@ public class MongoIngestionStore implements IngestionStore {
 
         // ---------- mongo insert-or-touch (idempotent on snapshotHash) ----------
         try {
-            Bson filter = Filters.eq(F_SNAPSHOT_HASH, snap);
+            Bson filter = Filters.eq(F_INGESTION_ID, ingestionId);
 
             Document existing = col.find(filter).first();
 
