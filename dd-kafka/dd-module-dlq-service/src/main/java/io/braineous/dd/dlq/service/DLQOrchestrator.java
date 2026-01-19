@@ -33,15 +33,59 @@ public class DLQOrchestrator {
         this.httpPoster = httpPoster;
     }
 
-    public void orchestrateDomainFailure(JsonObject ddEventJson) {
+    //-------------------------------------------------------------------------
+    public DLQResult orchestrateDomainFailure(Exception exception, String ingestionStr){
+        try {
+            if (exception == null) {
+                return null;
+            }
+
+            if (ingestionStr == null || ingestionStr.trim().length() == 0) {
+                return null;
+            }
+
+            JsonElement dlqEventElement = JsonParser.parseString(ingestionStr);
+
+            JsonObject dlqEvent;
+            if (dlqEventElement.isJsonArray()) {
+                JsonArray arr = dlqEventElement.getAsJsonArray();
+                if (arr == null || arr.size() == 0) {
+                    throw new IllegalArgumentException("DLQ-ING-events_empty");
+                }
+                dlqEvent = arr.get(0).getAsJsonObject();
+            } else if (dlqEventElement.isJsonObject()) {
+                dlqEvent = dlqEventElement.getAsJsonObject();
+            } else {
+                throw new IllegalArgumentException("DLQ-ING-events_not_object");
+            }
+
+            String message = exception.getMessage();
+            if (message == null || message.trim().length() == 0) {
+                message = exception.getClass().getName();
+            }
+
+            JsonObject out = dlqEvent.deepCopy();
+            out.addProperty("dlqDomainCode", "DD-DLQ-DOMAIN-EXCEPTION");
+            out.addProperty("dlqDomainException", message);
+
+
+            DLQResult result = this.orchestrateDomainFailure(out);
+
+            return result;
+        }catch(Exception e){
+            Console.log("error_processing_dlq_domain_failure", String.valueOf(e));
+            return null;
+        }
+    }
+
+    private DLQResult orchestrateDomainFailure(JsonObject ddEventJson) {
         if(ddEventJson == null){
-            return;
+            return null;
         }
 
         if (httpPoster == null || serializer == null) {
-            return;
+            return null;
         }
-
 
         CaptureStore store = CaptureStore.getInstance();
         String endpoint = DOMAIN_ENDPOINT;
@@ -52,6 +96,8 @@ public class DLQOrchestrator {
         //for IT Test
         store.addDomainFailure(ddEventJson.toString());
         store.setDlqResult(result);
+
+        return result;
     }
 
     //----------------------------------------------------------------------------------------------

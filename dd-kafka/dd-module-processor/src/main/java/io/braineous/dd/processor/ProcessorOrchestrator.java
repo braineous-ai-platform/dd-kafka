@@ -62,13 +62,9 @@ public class ProcessorOrchestrator {
                     snapshot.snapshotHash().getValue() == null ||
                     snapshot.snapshotHash().getValue().trim().length() == 0
             ) {
-                //TODO: candidate for DLQ-Quantine channel in 1.0.1. for now
-                //simple REST layer 400 validation response
-                //to avoid replay poison pill
-                /*this.dlqOrch.orchestrateSystemFailure(
-                        new Exception("DD-ORCH-INGESTION_ID-cgo" + "cgo_view_null"),
-                        ddEventJson.toString()
-                );*/
+                //record as DLQ Domain Failure
+                Exception e = new Exception(ddEventJson.toString());
+                this.dlqOrch.orchestrateDomainFailure(e, ddEventJson.toString());
 
                 return ProcessorResult.fail(ddEventJson,
                         new Why("DD-ORCH-INGESTION_ID-cgo", "cgo_view_null"));
@@ -81,13 +77,9 @@ public class ProcessorOrchestrator {
 
             String ingestionId = this.nextIngestionId(ddEventStr, view);
             if (ingestionId == null) {
-                //TODO: candidate for DLQ-Quantine channel in 1.0.1. for now
-                //simple REST layer 400 validation response
-                //to avoid replay poison pill
-                /*this.dlqOrch.orchestrateSystemFailure(
-                        new Exception("DD-ORCH-INGESTION_ID-cgo" + "ingestion_id_null"),
-                        ddEventJson.toString()
-                );*/
+                //record as DLQ Domain Failure
+                Exception e = new Exception(ddEventJson.toString());
+                this.dlqOrch.orchestrateDomainFailure(e, ddEventJson.toString());
 
                 return ProcessorResult.fail(ddEventJson,
                         new Why("DD-ORCH-INGESTION_ID-cgo", "ingestion_id_null"));
