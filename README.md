@@ -1,6 +1,10 @@
 # dd-kafka
 # KafkaDD — Deterministic Ingestion & Replay for Kafka
 
+[![Docker Pulls](https://img.shields.io/docker/pulls/braineousai/dd-kafka-dd-pack.svg)](https://hub.docker.com/r/braineousai/dd-kafka-dd-pack)
+[![Docker Image Version](https://img.shields.io/docker/v/braineousai/dd-kafka-dd-pack?sort=semver)](https://hub.docker.com/r/braineousai/dd-kafka-dd-pack)
+
+
 KafkaDD is a deterministic ingestion system designed for event-driven platforms where **correctness, replayability, and failure transparency** matter more than raw throughput.
 
 This project is **not** a Kafka wrapper, a generic DLQ library, or an “AI-powered” framework.
@@ -335,6 +339,38 @@ Read it when:
 - failures seem unclear or inconsistent
 
 Most issues are misunderstandings of the contract, not bugs.
+
+
+---
+
+## Docker Images (v1.0.0)
+
+KafkaDD services are published to Docker Hub with immutable version tags.
+
+### Core Runtime
+
+- **dd-pack (API entrypoint)**  
+  https://hub.docker.com/r/braineousai/dd-kafka-dd-pack
+
+- **Kafka Producer**  
+  https://hub.docker.com/r/braineousai/dd-kafka-dd-module-kafka-producer
+
+- **Kafka Processor**  
+  https://hub.docker.com/r/braineousai/dd-kafka-dd-module-kafka-processor
+
+- **DLQ Service**  
+  https://hub.docker.com/r/braineousai/dd-kafka-dd-module-dlq-service
+
+### Recommended Usage
+
+Use explicit release tags for evaluation and integration:
+
+```bash
+braineousai/dd-kafka-dd-pack:1.0.0
+```
+
+`latest` is provided for convenience, but `1.0.0` is the canonical release reference.
+
 
 
 
