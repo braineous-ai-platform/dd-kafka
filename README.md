@@ -371,6 +371,15 @@ braineousai/dd-kafka-dd-pack:1.0.0
 
 `latest` is provided for convenience, but `1.0.0` is the canonical release reference.
 
+### Commercial support
+
+KafkaDD is open-source and free to use.
+
+For teams that want hands-on help (ingestion diagnostics, DLQ/replay hardening, or production incident review), commercial support is available here:
+👉 https://www.upwork.com/services/product/development-it-spring-boot-microservice-with-kafka-starter-api-consumer-1984337692019194130
+
+Same model. Applied to your system.
+
 
 
 
