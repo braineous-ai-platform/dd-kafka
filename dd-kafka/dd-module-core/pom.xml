@@ -15,7 +15,7 @@
     <dependencies>
         <!-- CGO (Causal Graph Orchestrator -->
         <dependency>
-            <groupId>ai.braineous</groupId>
+            <groupId>io.github.braineous-ai-platform</groupId>
             <artifactId>cgo-core</artifactId>
             <version>1.0.0</version>
         </dependency>
