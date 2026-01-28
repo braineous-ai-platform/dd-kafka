@@ -371,14 +371,32 @@ braineousai/dd-kafka-dd-pack:1.0.0
 
 `latest` is provided for convenience, but `1.0.0` is the canonical release reference.
 
-### Commercial support
+## Commercial Support & Production Hardening
 
 KafkaDD is open-source and free to use.
 
-For teams that want hands-on help (ingestion diagnostics, DLQ/replay hardening, or production incident review), commercial support is available here:
-👉 https://www.upwork.com/services/product/development-it-spring-boot-microservice-with-kafka-starter-api-consumer-1984337692019194130
+Some teams, however, need **hands-on help** to apply these deterministic contracts safely in production environments.
 
-Same model. Applied to your system.
+If you are operating Kafka pipelines where failures must be **explicit, classified, and replay-safe**, I offer paid support for:
+
+- deterministic ingestion diagnostics
+- DLQ taxonomy design (domain vs system failures)
+- replay safety audits (idempotency + poison-pill handling)
+- production incident analysis using `ingestionId`-anchored observability
+- adapting KafkaDD contracts to existing Kafka or REST systems
+
+This is **not generic Kafka consulting**.  
+It is direct application of KafkaDD’s deterministic ingestion model to your system.
+
+👉 **Commercial delivery (Upwork project):**  
+https://www.upwork.com/services/product/development-it-spring-boot-microservice-with-kafka-starter-api-consumer-1984337692019194130
+
+If you’re unsure whether KafkaDD fits your use case, start with a concrete question:
+- your ingestion flow
+- your failure modes
+- your replay requirements
+
+Clarity first. Delivery second.
 
 
 
