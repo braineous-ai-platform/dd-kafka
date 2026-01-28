@@ -1,5 +1,6 @@
 # dd-kafka
 # KafkaDD — Deterministic Ingestion & Replay for Kafka
+![This is an image](parallax-image.jpg)
 
 [![Docker Pulls](https://img.shields.io/docker/pulls/braineousai/dd-kafka-dd-pack.svg)](https://hub.docker.com/r/braineousai/dd-kafka-dd-pack)
 [![Docker Image Version](https://img.shields.io/docker/v/braineousai/dd-kafka-dd-pack?sort=semver)](https://hub.docker.com/r/braineousai/dd-kafka-dd-pack)
